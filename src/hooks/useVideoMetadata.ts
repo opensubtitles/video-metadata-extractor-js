@@ -61,11 +61,39 @@ export const useVideoMetadata = () => {
         throw new Error(`Unsupported file format: ${extension || 'unknown'}. Supported formats: ${validExtensions.join(', ')}`);
       }
       
-      // Only read first 32MB for large files (metadata is usually in the beginning)
+      // Smart chunking strategy for different file types
       const chunkSize = 32 * 1024 * 1024; // 32MB
-      const fileData = fileSize > chunkSize ? file.slice(0, chunkSize) : file;
+      let fileData: Blob;
       
-      console.log('File size:', fileSize, 'Processing chunk size:', fileData.size);
+      if (fileSize <= chunkSize) {
+        // Small file - use entire file
+        fileData = file;
+        console.log('Small file - using entire file:', fileSize);
+      } else {
+        // Large file - use dual-chunk strategy for MP4 files (metadata can be at end)
+        // For other formats, use beginning chunk only
+        if (extension === 'mp4' || extension === 'm4v') {
+          console.log('Large MP4 file - using dual-chunk strategy');
+          showProgress('Processing large MP4 file...');
+          
+          // Read beginning and end chunks
+          const beginningChunk = file.slice(0, chunkSize);
+          const endChunk = file.slice(Math.max(0, fileSize - chunkSize), fileSize);
+          
+          // Create a combined file with both chunks
+          // This works because FFmpeg can handle fragmented MP4 data for metadata extraction
+          const combinedChunks = [beginningChunk, endChunk];
+          fileData = new Blob(combinedChunks, { type: file.type });
+          
+          console.log('Combined chunks - total size:', fileData.size);
+        } else {
+          // For other formats, metadata is typically at the beginning
+          fileData = file.slice(0, chunkSize);
+          console.log('Large file (non-MP4) - using beginning chunk:', fileData.size);
+        }
+      }
+      
+      console.log('File size:', fileSize, 'Processing data size:', fileData.size);
       
       // Write file to FFmpeg virtual filesystem
       console.log('Writing file to FFmpeg filesystem...');
