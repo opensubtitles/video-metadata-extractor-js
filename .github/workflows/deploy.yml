@@ -5,6 +5,7 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -24,7 +25,14 @@ jobs:
       run: npm ci
       
     - name: Build
-      run: npm run build
+      run: |
+        echo "Node version: $(node --version)"
+        echo "NPM version: $(npm --version)"
+        echo "TypeScript version: $(npx tsc --version)"
+        echo "Running TypeScript check..."
+        npx tsc --noEmit --pretty
+        echo "TypeScript check passed, running Vite build..."
+        npm run build
       
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
