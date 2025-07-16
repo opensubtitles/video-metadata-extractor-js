@@ -16,49 +16,41 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFi
   };
 
   const handleDragOver = (event: React.DragEvent<HTMLLabelElement>) => {
-    console.log('Drag over event triggered');
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(true);
   };
 
   const handleDragEnter = (event: React.DragEvent<HTMLLabelElement>) => {
-    console.log('Drag enter event triggered');
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(true);
   };
 
   const handleDragLeave = (event: React.DragEvent<HTMLLabelElement>) => {
-    console.log('Drag leave event triggered');
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(false);
   };
 
   const handleDrop = (event: React.DragEvent<HTMLLabelElement>) => {
-    console.log('Drop event triggered');
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(false);
     
     const files = event.dataTransfer.files;
-    console.log('Files dropped:', files.length);
     
     if (files.length > 0) {
       const file = files[0];
-      console.log('File type:', file.type);
-      console.log('File name:', file.name);
       
       const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.ogv', '.3gp', '.flv', '.wmv', '.m4v'];
       const fileName = file.name.toLowerCase();
       const hasVideoExtension = videoExtensions.some(ext => fileName.endsWith(ext));
       
       if (file.type.startsWith('video/') || hasVideoExtension) {
-        console.log('Valid video file, selecting');
         onFileSelect(file);
       } else {
-        console.log('Invalid file type - not a video file');
+        // Could show an error message to user here if needed
       }
     }
   };

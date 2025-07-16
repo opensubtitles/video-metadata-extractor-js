@@ -33,3 +33,7 @@ export interface ErrorState {
   isVisible: boolean;
   message: string;
 }
+
+export type MP4ProcessingStrategy = 
+  | 'chunks-32mb-dual'     // Default: 32MB from start + 32MB from end
+  | 'whole-file'           // Read entire file

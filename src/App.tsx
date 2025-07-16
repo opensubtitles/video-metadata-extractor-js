@@ -1,18 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { FileUpload } from './components/FileUpload';
 import { ProgressBar } from './components/ProgressBar';
 import { MetadataDisplay } from './components/MetadataDisplay';
 import { ErrorDisplay } from './components/ErrorDisplay';
-import { useVideoMetadata } from './hooks/useVideoMetadata';
+import { useSmartMetadata } from './hooks/useSmartMetadata';
 
 const App: React.FC = () => {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const { metadata, progress, error, handleFileSelect, hideError, isLoaded } = useVideoMetadata();
+  const { metadata, progress, error, handleFileSelect, hideError, isLoaded, selectedFile, currentMethod } = useSmartMetadata();
   
-  console.log('App render: isLoaded =', isLoaded);
 
   const onFileSelect = (file: File) => {
-    setSelectedFile(file);
     handleFileSelect(file);
   };
 
@@ -23,10 +20,18 @@ const App: React.FC = () => {
           Video Metadata Extractor
         </h1>
         
-        {!isLoaded && (
+        {!isLoaded && currentMethod === 'FFmpeg' && (
           <div className="mb-6 text-center">
             <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mr-2"></div>
             <span className="text-gray-600">Loading FFmpeg...</span>
+          </div>
+        )}
+        
+        {selectedFile && (
+          <div className="mb-4 text-center">
+            <span className="text-sm text-gray-600">
+              Using <span className="font-semibold text-blue-600">{currentMethod}</span> for {selectedFile.name}
+            </span>
           </div>
         )}
         
