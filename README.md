@@ -1,66 +1,101 @@
 # Video Metadata Extractor
 
-A browser-based video metadata extractor that uses FFmpeg WASM to analyze video files and extract comprehensive metadata information.
+A powerful, browser-based video metadata extractor that works with any video file format. Built with React, TypeScript, and intelligent processing engines.
 
-## Features
+## 🚀 [Live Demo](https://opensubtitles.github.io/video-metadata-extractor-js/)
 
-- **Browser-based**: No server required, runs entirely in the browser
-- **Large file support**: Handles files up to 2GB with chunked reading
-- **FFmpeg WASM**: Uses the powerful FFmpeg library compiled to WebAssembly
-- **Comprehensive metadata**: Extracts format, video, and audio stream information
-- **Responsive UI**: Clean, modern interface that works on desktop and mobile
-- **Progress tracking**: Real-time progress indicators during processing
+Try it online! Just drag and drop any video file to extract comprehensive metadata instantly.
 
-## Usage
+## ✨ Features
 
-1. Open `index.html` in a web browser
-2. Click "Choose Video File" to select a video file
-3. Wait for FFmpeg to load (first time only)
-4. View extracted metadata including:
-   - Format information (duration, size, bitrate)
-   - Video streams (resolution, codec, frame rate)
-   - Audio streams (sample rate, channels, codec)
+### 🎯 Universal Media Support
+- **MP4/MOV/M4V** → Optimized with MP4Box.js
+- **AVI/MKV/WMV/WebM/OGV/3GP/FLV** → Powered by FFmpeg WebAssembly
+- **Audio formats** → AAC, MP3, WAV support
+- **Large files** → Handles files up to 6GB+ efficiently
 
-## Technical Details
+### 🧠 Smart Auto-Detection
+- Automatically selects the best processor for each file type
+- No configuration needed - just drop any media file
+- Optimized performance for each format
 
-### Chunked Reading
-The application reads only the first 32MB of large video files, which is sufficient for metadata extraction while staying under browser memory limits.
+### 📊 Comprehensive Metadata
+- **Video**: Resolution, codec, frame rate, bitrate, duration, total frames
+- **Audio**: Codec, sample rate, channels, bitrate  
+- **Format**: File size, container format, movie time (milliseconds)
+- **Advanced**: Pixel format, profile information, stream details
 
-### FFmpeg Integration
-Uses FFmpeg WASM v0.12.10 with the following command:
+### 🎨 Professional UI
+- Clean drag & drop interface
+- Real-time processing feedback
+- Comprehensive error handling
+- Responsive design
+- Progress indicators
+
+## 🔧 Technical Details
+
+### Dual Processing Engine
+- **MP4Box.js**: Fast, memory-efficient MP4 parsing with native chunking
+- **FFmpeg WASM**: Universal video processor with intelligent file handling
+- **Smart chunking**: Handles large files without memory issues
+
+### Architecture
+- **React + TypeScript** for type safety and maintainability
+- **Vite** for fast development and optimized builds
+- **Tailwind CSS** for responsive, professional styling
+- **Modular hooks** for separation of concerns
+- **Error boundaries** for graceful failure handling
+
+## 🛠️ Development
+
+### Prerequisites
+- Node.js 18+ 
+- npm or yarn
+
+### Setup
 ```bash
-ffmpeg -v quiet -print_format json -show_format -show_streams -i input.ext
+# Clone the repository
+git clone https://github.com/opensubtitles/video-metadata-extractor-js.git
+cd video-metadata-extractor-js
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
 ```
 
-### Supported Formats
-Supports all video formats that FFmpeg can handle, including:
-- MP4, AVI, MOV, MKV
-- WebM, OGV, FLV
-- And many more
+### Build
+```bash
+# Build for production
+npm run build
 
-## Files Structure
+# Preview production build
+npm run preview
+```
 
-- `index.html` - Main HTML page with UI structure
-- `styles.css` - Styling for the application
-- `script.js` - Main JavaScript application logic
-- `README.md` - This documentation
+## 🌐 Deployment
 
-## Browser Compatibility
+The project is automatically deployed to GitHub Pages via GitHub Actions on every push to the master branch.
 
-- Chrome 57+
-- Firefox 52+
-- Safari 11+
-- Edge 79+
+**Live URL**: https://opensubtitles.github.io/video-metadata-extractor-js/
 
-Requires browsers that support WebAssembly and modern JavaScript features.
+## 🤝 Contributing
 
-## Development
+Contributions are welcome! Please feel free to submit issues and pull requests.
 
-To run locally:
-1. Serve the files from a web server (required for WASM loading)
-2. For development: `python -m http.server 8000` or similar
-3. Open `http://localhost:8000` in your browser
+## 📝 License
 
-## License
+This project is open source and available under the MIT License.
 
-MIT License
+## 🙏 Acknowledgments
+
+- [FFmpeg](https://ffmpeg.org/) - Universal multimedia framework
+- [MP4Box.js](https://github.com/gpac/mp4box.js) - JavaScript MP4 parser
+- [React](https://reactjs.org/) - UI library
+- [Vite](https://vitejs.dev/) - Build tool
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
+
+---
+
+Built with ❤️ by the OpenSubtitles team
