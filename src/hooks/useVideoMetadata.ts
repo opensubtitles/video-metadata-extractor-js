@@ -260,8 +260,6 @@ export const useVideoMetadata = () => {
       }
       
       try {
-        showProgress('Loading FFmpeg...');
-        
         // FFmpeg logging disabled for cleaner console output
         
         // Use the same pattern as the official example
@@ -273,7 +271,6 @@ export const useVideoMetadata = () => {
         });
         
         setIsLoaded(true);
-        hideProgress();
       } catch (err) {
         console.error('Failed to load FFmpeg:', err);
         
@@ -293,7 +290,6 @@ export const useVideoMetadata = () => {
         }
         
         showError(errorMessage);
-        hideProgress();
       }
     };
     

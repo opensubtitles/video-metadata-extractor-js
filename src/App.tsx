@@ -20,12 +20,6 @@ const App: React.FC = () => {
           Video Metadata Extractor
         </h1>
         
-        {!isLoaded && currentMethod === 'FFmpeg' && (
-          <div className="mb-6 text-center">
-            <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mr-2"></div>
-            <span className="text-gray-600">Loading FFmpeg...</span>
-          </div>
-        )}
         
         {selectedFile && (
           <div className="mb-4 text-center">
@@ -35,7 +29,7 @@ const App: React.FC = () => {
           </div>
         )}
         
-        <FileUpload onFileSelect={onFileSelect} selectedFile={selectedFile} />
+        <FileUpload onFileSelect={onFileSelect} selectedFile={selectedFile} isLoaded={isLoaded} currentMethod={currentMethod} />
         
         {progress.isVisible && (
           <ProgressBar progress={progress} />

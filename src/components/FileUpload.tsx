@@ -3,9 +3,11 @@ import { useState } from 'react';
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
   selectedFile: File | null;
+  isLoaded?: boolean;
+  currentMethod?: string;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFile }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFile, isLoaded, currentMethod }) => {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,27 +105,41 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFi
             </div>
             
             <div className="text-center">
-              <h3 className={`
-                text-2xl font-bold mb-2 transition-colors duration-300
-                ${isDragOver ? 'text-orange-600' : 'text-gray-700'}
-              `}>
-                {isDragOver ? 'Drop your video here' : 'Upload Video File'}
-              </h3>
-              <p className={`
-                text-base mb-4 transition-colors duration-300
-                ${isDragOver ? 'text-orange-500' : 'text-gray-500'}
-              `}>
-                {isDragOver ? 'Release to upload' : 'Drag & drop or click to browse'}
-              </p>
-              <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
-                <span>MP4</span>
-                <span>•</span>
-                <span>MOV</span>
-                <span>•</span>
-                <span>AVI</span>
-                <span>•</span>
-                <span>MKV</span>
-              </div>
+              {!isLoaded && currentMethod === 'FFmpeg' ? (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
+                    <span className="text-gray-600 text-lg">Loading FFmpeg...</span>
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Please wait while we initialize the video processing engine
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <h3 className={`
+                    text-2xl font-bold mb-2 transition-colors duration-300
+                    ${isDragOver ? 'text-orange-600' : 'text-gray-700'}
+                  `}>
+                    {isDragOver ? 'Drop your video here' : 'Upload Video File'}
+                  </h3>
+                  <p className={`
+                    text-base mb-4 transition-colors duration-300
+                    ${isDragOver ? 'text-orange-500' : 'text-gray-500'}
+                  `}>
+                    {isDragOver ? 'Release to upload' : 'Drag & drop or click to browse'}
+                  </p>
+                  <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
+                    <span>MP4</span>
+                    <span>•</span>
+                    <span>MOV</span>
+                    <span>•</span>
+                    <span>AVI</span>
+                    <span>•</span>
+                    <span>MKV</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </label>
