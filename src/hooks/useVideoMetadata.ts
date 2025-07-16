@@ -63,14 +63,33 @@ export const useVideoMetadata = () => {
       
       // Smart chunking strategy for different file types
       const chunkSize = 32 * 1024 * 1024; // 32MB
+      const mp4LargeFileThreshold = 200 * 1024 * 1024; // 200MB threshold for MP4 chunking
       let fileData: Blob;
       
       if (extension === 'mp4' || extension === 'm4v') {
-        // For MP4 files, always read the entire file to ensure we get all metadata
-        // This is necessary because MP4 metadata can be at the end of the file
-        fileData = file;
-        console.log('MP4 file - reading entire file:', fileSize);
-        showProgress('Processing MP4 file (reading entire file)...');
+        if (fileSize <= mp4LargeFileThreshold) {
+          // For MP4 files under 200MB, read entire file to ensure we get all metadata
+          fileData = file;
+          console.log('MP4 file (≤200MB) - reading entire file:', fileSize);
+          showProgress('Processing MP4 file...');
+        } else {
+          // For very large MP4 files, try a larger chunk strategy
+          // Read first 64MB + last 64MB to capture metadata that could be at either end
+          console.log('Large MP4 file (>200MB) - using enhanced chunking strategy');
+          showProgress('Processing large MP4 file...');
+          
+          const largeChunkSize = 64 * 1024 * 1024; // 64MB chunks for large files
+          const beginningChunk = file.slice(0, largeChunkSize);
+          const endChunk = file.slice(Math.max(0, fileSize - largeChunkSize), fileSize);
+          
+          // For large files, create a more seamless merge by including some middle content
+          // This helps FFmpeg understand the file structure better
+          const middleStart = Math.floor(fileSize / 2) - (chunkSize / 2);
+          const middleChunk = file.slice(middleStart, middleStart + chunkSize);
+          
+          fileData = new Blob([beginningChunk, middleChunk, endChunk], { type: file.type });
+          console.log('Large MP4 - combined chunks size:', fileData.size);
+        }
       } else if (fileSize <= chunkSize) {
         // Small file - use entire file
         fileData = file;
