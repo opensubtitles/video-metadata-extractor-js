@@ -65,32 +65,20 @@ export const useVideoMetadata = () => {
       const chunkSize = 32 * 1024 * 1024; // 32MB
       let fileData: Blob;
       
-      if (fileSize <= chunkSize) {
+      if (extension === 'mp4' || extension === 'm4v') {
+        // For MP4 files, always read the entire file to ensure we get all metadata
+        // This is necessary because MP4 metadata can be at the end of the file
+        fileData = file;
+        console.log('MP4 file - reading entire file:', fileSize);
+        showProgress('Processing MP4 file (reading entire file)...');
+      } else if (fileSize <= chunkSize) {
         // Small file - use entire file
         fileData = file;
         console.log('Small file - using entire file:', fileSize);
       } else {
-        // Large file - use dual-chunk strategy for MP4 files (metadata can be at end)
-        // For other formats, use beginning chunk only
-        if (extension === 'mp4' || extension === 'm4v') {
-          console.log('Large MP4 file - using dual-chunk strategy');
-          showProgress('Processing large MP4 file...');
-          
-          // Read beginning and end chunks
-          const beginningChunk = file.slice(0, chunkSize);
-          const endChunk = file.slice(Math.max(0, fileSize - chunkSize), fileSize);
-          
-          // Create a combined file with both chunks
-          // This works because FFmpeg can handle fragmented MP4 data for metadata extraction
-          const combinedChunks = [beginningChunk, endChunk];
-          fileData = new Blob(combinedChunks, { type: file.type });
-          
-          console.log('Combined chunks - total size:', fileData.size);
-        } else {
-          // For other formats, metadata is typically at the beginning
-          fileData = file.slice(0, chunkSize);
-          console.log('Large file (non-MP4) - using beginning chunk:', fileData.size);
-        }
+        // Large file (non-MP4) - use beginning chunk only (metadata typically at start)
+        fileData = file.slice(0, chunkSize);
+        console.log('Large file (non-MP4) - using beginning chunk:', fileData.size);
       }
       
       console.log('File size:', fileSize, 'Processing data size:', fileData.size);
