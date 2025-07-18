@@ -23,7 +23,9 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, onClose }) =
     >
       <div className="bg-white rounded-lg p-6 m-4 max-w-md w-full shadow-2xl">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Processing...</h3>
+          <h3 className="text-lg font-semibold text-gray-800">
+            {progress.progress === 100 ? 'Complete!' : 'Processing...'}
+          </h3>
           {onClose && (
             <button
               onClick={onClose}

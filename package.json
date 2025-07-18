@@ -1,6 +1,6 @@
 {
   "name": "video-metadata-extractor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A browser-based video metadata extractor that uses FFmpeg WASM to analyze video files and extract comprehensive metadata information.",
   "main": "index.html",
   "scripts": {

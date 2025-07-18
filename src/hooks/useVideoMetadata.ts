@@ -202,17 +202,103 @@ export const useVideoMetadata = () => {
   }, []);
 
 
+  // Memory-efficient FFmpeg cleanup and reuse
+  const cleanupFFmpegFiles = useCallback(async () => {
+    if (!ffmpegRef.current) return;
+    
+    try {
+      // Add delay before cleanup to ensure any pending operations complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Clean up known temporary files with retry logic
+      const tempFiles = ['input.video', 'output.video', 'subtitle.srt', 'subtitle.ass', 'subtitle.vtt'];
+      for (const fileName of tempFiles) {
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            await ffmpegRef.current.deleteFile(fileName);
+            break;
+          } catch (err) {
+            retries--;
+            if (retries > 0) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          }
+        }
+      }
+      
+      // Add delay before listing directory
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // List and clean up any remaining files
+      try {
+        const files = await ffmpegRef.current.listDir('/');
+        const systemDirs = new Set(['.', '..', 'tmp', 'home', 'dev', 'proc', 'usr', 'bin', 'etc', 'var', 'lib']);
+        
+        for (const fileInfo of files) {
+          const fileName = typeof fileInfo === 'string' ? fileInfo : fileInfo.name;
+          const isDir = typeof fileInfo === 'object' && fileInfo.isDir;
+          
+          // Skip system directories
+          if (!systemDirs.has(fileName) && !isDir) {
+            let retries = 3;
+            while (retries > 0) {
+              try {
+                await ffmpegRef.current.deleteFile(fileName);
+                break;
+              } catch (err) {
+                retries--;
+                if (retries > 0) {
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
+              }
+            }
+          }
+        }
+      } catch (listError) {
+        // Continue on error
+      }
+      
+      // Force garbage collection if available
+      if (typeof window !== 'undefined' && (window as any).gc) {
+        (window as any).gc();
+      }
+      
+      // Final delay to ensure cleanup is complete
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+    } catch (cleanupError) {
+      // Continue on error
+    }
+  }, []);
+
   const extractMetadata = useCallback(async (file: File) => {
     if (!isLoaded) return;
 
     try {
+      console.log(`[FFMPEG DEBUG] extractMetadata called for: ${file.name}`);
       showProgress('Processing video...');
+      
+      // Clean up any existing files before starting
+      console.log(`[FFMPEG DEBUG] Starting cleanup before processing`);
+      await cleanupFFmpegFiles();
+      console.log(`[FFMPEG DEBUG] Cleanup completed`);
+      
+      // Add additional delay after cleanup to ensure virtual filesystem is ready
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Validate file size (prevent extremely large files that could cause memory issues)
       const fileSize = file.size;
+      
       if (fileSize === 0) {
-        throw new Error('File appears to be empty');
+        throw new Error(`File "${file.name}" appears to be empty`);
       }
+      
+      // Check for extremely large files and apply strict memory limits
+      const maxFileSize = 1024 * 1024 * 1024; // 1GB limit for memory safety
+      
+      // Check available memory
+      const availableMemory = (performance as any).memory?.usedJSHeapSize || 0;
       
       // Check if file has a valid extension based on FFmpeg demuxers
       const validExtensions = [
@@ -251,29 +337,96 @@ export const useVideoMetadata = () => {
         throw new Error(`Unsupported file format: ${extension || 'unknown'}. Supported formats include: mp4, avi, mov, mkv, webm, flv, 3gp, wmv, mpg, ogg, and many others.`);
       }
       
-      // Smart chunking strategy for different file types
-      const chunkSize = 32 * 1024 * 1024; // 32MB
+      // Memory-efficient chunking strategy
+      let chunkSize = 16 * 1024 * 1024; // Start with 16MB for better memory management
+      
+      // Adjust chunk size based on available memory
+      if (availableMemory > 0) {
+        const memoryMB = availableMemory / 1024 / 1024;
+        if (memoryMB > 800) {
+          // High memory usage - use very small chunks
+          chunkSize = 8 * 1024 * 1024; // 8MB
+        } else if (memoryMB > 400) {
+          // Medium memory usage - use small chunks
+          chunkSize = 12 * 1024 * 1024; // 12MB
+        }
+      }
+      
+      // Further reduce chunk size for very large files
+      if (fileSize > maxFileSize) {
+        chunkSize = Math.min(chunkSize, 8 * 1024 * 1024); // 8MB max for large files
+      }
+      
       let fileData: Blob;
       
       if (extension === 'mp4' || extension === 'm4v') {
-        // Use whole-file strategy for MP4-based files
-        fileData = processMP4File(file);
-        showProgress(`Processing ${extension.toUpperCase()} file...`);
+        // For MP4 files, use chunk-based approach for memory safety
+        if (fileSize <= chunkSize) {
+          fileData = file;
+        } else {
+          fileData = file.slice(0, chunkSize);
+        }
+        showProgress(`Processing ${extension.toUpperCase()} file (${Math.round(fileData.size / 1024 / 1024)}MB)...`);
       } else if (fileSize <= chunkSize) {
         // Small file - use entire file
         fileData = file;
       } else {
-        // Large file (non-MP4) - use beginning chunk only (metadata typically at start)
+        // Large file - use beginning chunk only (metadata typically at start)
         fileData = file.slice(0, chunkSize);
       }
       
       // Write file to FFmpeg virtual filesystem
       showProgress('Loading file into FFmpeg...');
       
-      try {
-        await ffmpegRef.current.writeFile('input.video', await fetchFile(fileData));
-      } catch (writeError) {
-        throw new Error(`Failed to load file into FFmpeg: ${writeError instanceof Error ? writeError.message : 'Unknown error'}`);
+      // Retry file write operation with exponential backoff
+      let writeAttempts = 0;
+      const maxWriteAttempts = 3;
+      let writeSuccess = false;
+      
+      while (writeAttempts < maxWriteAttempts && !writeSuccess) {
+        try {
+          writeAttempts++;
+          
+          // Ensure we have a clean state before writing
+          try {
+            await ffmpegRef.current.deleteFile('input.video');
+          } catch (cleanupError) {
+            // Continue
+          }
+          
+          // Add delay between retry attempts
+          if (writeAttempts > 1) {
+            const delay = Math.pow(2, writeAttempts - 1) * 100; // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
+          // Prepare file data
+          const fileBuffer = await fetchFile(fileData);
+          
+          // Add timeout to prevent hanging
+          const writePromise = ffmpegRef.current.writeFile('input.video', fileBuffer);
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('File write timeout')), 30000); // 30 second timeout
+          });
+          
+          await Promise.race([writePromise, timeoutPromise]);
+          
+          // File write completed successfully
+          writeSuccess = true;
+          
+        } catch (writeError) {
+          // Clean up any partial state
+          try {
+            await ffmpegRef.current.deleteFile('input.video');
+          } catch (cleanupError) {
+            // Continue
+          }
+          
+          // If this was the last attempt, throw the error
+          if (writeAttempts >= maxWriteAttempts) {
+            throw new Error(`Failed to load file into FFmpeg after ${maxWriteAttempts} attempts: ${writeError instanceof Error ? writeError.message : 'Unknown error'}`);
+          }
+        }
       }
       
       // Capture FFmpeg log output to parse metadata
@@ -289,9 +442,15 @@ export const useVideoMetadata = () => {
       showProgress('Extracting metadata...');
       
       try {
-        await ffmpegRef.current.exec(['-i', 'input.video']);
+        // Add timeout to prevent hanging
+        const execPromise = ffmpegRef.current.exec(['-i', 'input.video']);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('FFmpeg execution timeout')), 60000); // 60 second timeout
+        });
+        
+        await Promise.race([execPromise, timeoutPromise]);
       } catch (ffmpegError) {
-        // Expected error for info extraction
+        // Expected error for info extraction - FFmpeg always "fails" with -i command
       }
       
       // Remove log handler
@@ -309,7 +468,13 @@ export const useVideoMetadata = () => {
       if (logOutput.includes('Invalid data found when processing input') || 
           logOutput.includes('No such file or directory') ||
           logOutput.includes('Operation not permitted')) {
-        throw new Error('File appears to be corrupted or not a valid media file');
+        
+        // Check if this is a virtual filesystem issue
+        if (logOutput.includes('No such file or directory')) {
+          throw new Error(`Failed to load file "${file.name}" into FFmpeg virtual filesystem. This may be due to memory constraints or file corruption.`);
+        }
+        
+        throw new Error(`File "${file.name}" appears to be corrupted or not a valid media file`);
       }
       
       if (logOutput.includes('Decoder (codec ') && logOutput.includes('not found')) {
@@ -440,15 +605,18 @@ export const useVideoMetadata = () => {
         ]
       };
       
+      console.log(`[FFMPEG DEBUG] Metadata extracted successfully for: ${file.name}`);
       setMetadata(extractedMetadata);
       
-      // Clean up
-      await ffmpegRef.current.deleteFile('input.video');
+      // Clean up after successful processing
+      console.log(`[FFMPEG DEBUG] Starting cleanup after successful processing`);
+      await cleanupFFmpegFiles();
+      console.log(`[FFMPEG DEBUG] Final cleanup completed for: ${file.name}`);
       
       hideProgress();
       
     } catch (err) {
-      console.error('Processing error:', err);
+      console.error(`[FFMPEG DEBUG] Processing error for ${file.name}:`, err);
       
       // Provide more specific error messages based on error type
       let errorMessage: string;
@@ -470,17 +638,16 @@ export const useVideoMetadata = () => {
         errorMessage += '. The file processing took too long. Try with a smaller file.';
       }
       
+      console.log(`[FFMPEG DEBUG] Showing error for ${file.name}: ${errorMessage}`);
       showError(errorMessage);
       hideProgress();
       
-      // Cleanup any partial file that might have been written
-      try {
-        await ffmpegRef.current.deleteFile('input.video');
-      } catch (cleanupError) {
-        console.warn('Failed to cleanup temporary file:', cleanupError);
-      }
+      // Clean up after error
+      console.log(`[FFMPEG DEBUG] Starting cleanup after error for: ${file.name}`);
+      await cleanupFFmpegFiles();
+      console.log(`[FFMPEG DEBUG] Error cleanup completed for: ${file.name}`);
     }
-  }, [isLoaded, showProgress, hideProgress, showError, processMP4File]);
+  }, [isLoaded, showProgress, hideProgress, showError, processMP4File, cleanupFFmpegFiles]);
 
   // Load FFmpeg following the official example pattern
   useEffect(() => {
@@ -527,29 +694,22 @@ export const useVideoMetadata = () => {
     };
     
     load();
-  }, [showProgress, hideProgress, showError]);
+  }, [showError]);
 
   const extractSubtitle = useCallback(async (file: File, streamIndex: number, language?: string, codecName?: string, isForced?: boolean) => {
     if (!isLoaded) return;
-
-    const startTime = performance.now();
-    console.log(`[FFmpeg Subtitle Extraction] Starting extraction for subtitle stream ${streamIndex}`, {
-      file: file.name,
-      size: file.size,
-      language,
-      codec: codecName,
-      forced: isForced,
-      timestamp: new Date().toISOString()
-    });
 
     try {
       showProgress(`Preparing subtitle track ${streamIndex}...`, 10);
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // For larger files, use full file for subtitle extraction to ensure we get complete subtitle data
+      // Clean up before extraction
+      await cleanupFFmpegFiles();
+      
+      // For larger files, use smaller chunks for memory safety
       const fileSize = file.size;
-      const maxChunkSize = 100 * 1024 * 1024; // 100MB max for subtitle extraction
-      const fileData = fileSize <= maxChunkSize ? file : file;
+      const maxChunkSize = 50 * 1024 * 1024; // 50MB max for subtitle extraction (reduced for memory safety)
+      const fileData = fileSize <= maxChunkSize ? file : file.slice(0, maxChunkSize);
       
       // Write file to FFmpeg virtual filesystem
       showProgress(`Loading subtitle track into FFmpeg...`, 30);
@@ -571,8 +731,6 @@ export const useVideoMetadata = () => {
         outputFormat = 'webvtt';
       }
       
-      console.log(`[FFmpeg Subtitle Extraction] Generated filename: ${outputFilename}, format: ${outputFormat}`);
-      
       try {
         // Try to extract subtitle in its native format first
         showProgress(`Extracting subtitle track (${outputFormat} format)...`, 60);
@@ -585,10 +743,8 @@ export const useVideoMetadata = () => {
           outputFilename
         ]);
         
-        console.log(`[FFmpeg Subtitle Extraction] Successfully extracted in ${outputFormat} format`);
       } catch (extractError) {
         // If native format fails, try converting to SRT
-        console.warn(`[FFmpeg Subtitle Extraction] ${outputFormat} format extraction failed, trying SRT conversion:`, extractError);
         outputFormat = 'srt';
         const srtFilename = outputFilename.replace(/\.[^/.]+$/, '.srt');
         
@@ -617,9 +773,8 @@ export const useVideoMetadata = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        // Clean up
-        await ffmpegRef.current.deleteFile('input.video');
-        await ffmpegRef.current.deleteFile(srtFilename);
+        // Clean up after extraction
+        await cleanupFFmpegFiles();
         
         hideProgress();
         return;
@@ -640,23 +795,13 @@ export const useVideoMetadata = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      // Clean up
-      await ffmpegRef.current.deleteFile('input.video');
-      await ffmpegRef.current.deleteFile(outputFilename);
-      
-      const totalTime = performance.now() - startTime;
-      console.log(`[FFmpeg Subtitle Extraction] Extraction completed successfully in ${totalTime.toFixed(2)}ms`, {
-        outputSize: subtitleData.length,
-        format: outputFormat,
-        filename: outputFilename
-      });
+      // Clean up after extraction
+      await cleanupFFmpegFiles();
       
       // Show completion message and let user manually close
       showProgress(`Subtitle extraction completed successfully! Download should start automatically.`, 100);
       
     } catch (err) {
-      const totalTime = performance.now() - startTime;
-      console.error(`[FFmpeg Subtitle Extraction] Extraction failed after ${totalTime.toFixed(2)}ms:`, err);
       
       let errorMessage = 'Failed to extract subtitle';
       if (err instanceof Error) {
@@ -670,43 +815,18 @@ export const useVideoMetadata = () => {
         } else if (err.message.includes('Decoder not found')) {
           errorMessage = 'Subtitle codec not supported. Try a different subtitle track.';
         }
-        
-        console.error(`[FFmpeg Subtitle Extraction] Error details:`, {
-          message: err.message,
-          stack: err.stack,
-          file: file.name,
-          streamIndex,
-          language,
-          codecName
-        });
       }
       
       showError(errorMessage);
       hideProgress();
       
-      // Cleanup
-      try {
-        await ffmpegRef.current.deleteFile('input.video');
-        await ffmpegRef.current.deleteFile(`subtitle_${streamIndex}.${language || 'unknown'}.srt`);
-        await ffmpegRef.current.deleteFile(`subtitle_${streamIndex}.${language || 'unknown'}.ass`);
-        await ffmpegRef.current.deleteFile(`subtitle_${streamIndex}.${language || 'unknown'}.vtt`);
-        console.log(`[FFmpeg Subtitle Extraction] Cleanup completed`);
-      } catch (cleanupError) {
-        console.warn('[FFmpeg Subtitle Extraction] Failed to cleanup subtitle extraction files:', cleanupError);
-      }
+      // Clean up after error
+      await cleanupFFmpegFiles();
     }
-  }, [isLoaded, showProgress, hideProgress, showError]);
+  }, [isLoaded, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
 
   const extractStream = useCallback(async (file: File, streamIndex: number, streamType: string, codecName?: string) => {
     if (!isLoaded) return;
-
-    const startTime = performance.now();
-    console.log(`[FFmpeg Stream Extraction] Starting extraction for ${streamType} stream ${streamIndex}`, {
-      file: file.name,
-      size: file.size,
-      codec: codecName,
-      timestamp: new Date().toISOString()
-    });
 
     try {
       showProgress(`Preparing ${streamType} stream ${streamIndex}...`, 10);
@@ -714,25 +834,19 @@ export const useVideoMetadata = () => {
       // Add small delay to ensure progress bar is visible
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // For stream extraction, use full file to ensure complete stream data
+      // Clean up before extraction
+      await cleanupFFmpegFiles();
+      
+      // For stream extraction, use smaller chunks for memory safety
       const fileSize = file.size;
-      const maxChunkSize = 200 * 1024 * 1024; // 200MB max for stream extraction
-      const fileData = fileSize <= maxChunkSize ? file : file;
-      
-      // Warn about potentially large output files
-      if (fileSize > 1024 * 1024 * 1024) { // > 1GB
-        console.warn(`[FFmpeg Stream Extraction] Large input file detected (${fileSize} bytes), output stream may be large`);
-      }
-      
-      console.log(`[FFmpeg Stream Extraction] File size: ${fileSize} bytes, using ${fileData.size} bytes`);
+      const maxChunkSize = 100 * 1024 * 1024; // 100MB max for stream extraction (reduced for memory safety)
+      const fileData = fileSize <= maxChunkSize ? file : file.slice(0, maxChunkSize);
       
       // Write file to FFmpeg virtual filesystem
       showProgress(`Loading ${streamType} stream into FFmpeg...`, 25);
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      const loadStartTime = performance.now();
       await ffmpegRef.current.writeFile('input.video', await fetchFile(fileData));
-      console.log(`[FFmpeg Stream Extraction] File loaded in ${(performance.now() - loadStartTime).toFixed(2)}ms`);
       
       // Determine output extension based on stream type and codec
       let outputExt = '';
@@ -764,17 +878,11 @@ export const useVideoMetadata = () => {
       }
       
       const outputFilename = `${streamType}_stream_${streamIndex}.${outputExt}`;
-      console.log(`[FFmpeg Stream Extraction] Output filename: ${outputFilename}, extension: ${outputExt}`);
-      
-      let extractionMethod = 'copy';
-      const extractStartTime = performance.now();
       
       try {
         // Extract stream with FFmpeg
         showProgress(`Extracting ${streamType} stream (copy mode)...`, 50);
         await new Promise(resolve => setTimeout(resolve, 200));
-        
-        console.log(`[FFmpeg Stream Extraction] Attempting stream copy for ${streamType} stream ${streamIndex}`);
         
         if (streamType === 'video') {
           await ffmpegRef.current.exec([
@@ -794,20 +902,12 @@ export const useVideoMetadata = () => {
           ]);
         }
         
-        console.log(`[FFmpeg Stream Extraction] Stream copy completed in ${(performance.now() - extractStartTime).toFixed(2)}ms`);
-        
       } catch (extractError) {
         // If copy fails, try with re-encoding
-        console.warn(`[FFmpeg Stream Extraction] Stream copy failed, trying with re-encoding:`, extractError);
-        extractionMethod = 'encode';
-        
         showProgress(`Extracting ${streamType} stream (encoding mode)...`, 50);
         await new Promise(resolve => setTimeout(resolve, 200));
         
-        const encodeStartTime = performance.now();
-        
         if (streamType === 'video') {
-          console.log(`[FFmpeg Stream Extraction] Re-encoding video with H.264`);
           await ffmpegRef.current.exec([
             '-i', 'input.video',
             '-map', `0:${streamIndex}`,
@@ -817,7 +917,6 @@ export const useVideoMetadata = () => {
             outputFilename
           ]);
         } else if (streamType === 'audio') {
-          console.log(`[FFmpeg Stream Extraction] Re-encoding audio with AAC`);
           await ffmpegRef.current.exec([
             '-i', 'input.video',
             '-map', `0:${streamIndex}`,
@@ -827,16 +926,13 @@ export const useVideoMetadata = () => {
           ]);
         }
         
-        console.log(`[FFmpeg Stream Extraction] Re-encoding completed in ${(performance.now() - encodeStartTime).toFixed(2)}ms`);
       }
       
       // Read the extracted stream file
       showProgress(`Preparing ${streamType} stream download...`, 75);
       await new Promise(resolve => setTimeout(resolve, 200));
       
-      const readStartTime = performance.now();
       const streamData = await ffmpegRef.current.readFile(outputFilename);
-      console.log(`[FFmpeg Stream Extraction] Stream data read: ${streamData.length} bytes in ${(performance.now() - readStartTime).toFixed(2)}ms`);
       
       // Convert to Uint8Array for consistent handling
       const streamUint8Array = streamData instanceof Uint8Array ? streamData : new Uint8Array(streamData as unknown as ArrayBuffer);
@@ -844,7 +940,6 @@ export const useVideoMetadata = () => {
       // Check file size and use appropriate download method
       const MAX_BLOB_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit
       if (streamUint8Array.length >= MAX_BLOB_SIZE) {
-        console.log(`[FFmpeg Stream Extraction] Large file detected (${streamUint8Array.length} bytes), using chunked download`);
         showProgress(`Downloading large ${streamType} stream...`, 90);
         
         // Use chunked download for large files
@@ -869,25 +964,13 @@ export const useVideoMetadata = () => {
         URL.revokeObjectURL(url);
       }
       
-      console.log(`[FFmpeg Stream Extraction] Download initiated for ${outputFilename}`);
-      
-      // Clean up
-      await ffmpegRef.current.deleteFile('input.video');
-      await ffmpegRef.current.deleteFile(outputFilename);
-      
-      const totalTime = performance.now() - startTime;
-      console.log(`[FFmpeg Stream Extraction] Extraction completed successfully in ${totalTime.toFixed(2)}ms`, {
-        method: extractionMethod,
-        outputSize: streamUint8Array.length,
-        compressionRatio: (streamUint8Array.length / fileSize * 100).toFixed(2) + '%'
-      });
+      // Clean up after extraction
+      await cleanupFFmpegFiles();
       
       // Show completion message and let user manually close
       showProgress(`${streamType} stream extraction completed successfully! Download should start automatically.`, 100);
       
     } catch (err) {
-      const totalTime = performance.now() - startTime;
-      console.error(`[FFmpeg Stream Extraction] Extraction failed after ${totalTime.toFixed(2)}ms:`, err);
       
       let errorMessage = 'Failed to extract stream';
       if (err instanceof Error) {
@@ -901,45 +984,31 @@ export const useVideoMetadata = () => {
         } else if (err.message.includes('Encoder not found')) {
           errorMessage = 'Stream codec not supported. Try a different stream.';
         }
-        
-        console.error(`[FFmpeg Stream Extraction] Error details:`, {
-          message: err.message,
-          stack: err.stack,
-          file: file.name,
-          streamIndex,
-          streamType,
-          codecName
-        });
       }
       
       showError(errorMessage);
       hideProgress();
       
-      // Cleanup
-      try {
-        await ffmpegRef.current.deleteFile('input.video');
-        await ffmpegRef.current.deleteFile(`${streamType}_stream_${streamIndex}.mp4`);
-        await ffmpegRef.current.deleteFile(`${streamType}_stream_${streamIndex}.aac`);
-        await ffmpegRef.current.deleteFile(`${streamType}_stream_${streamIndex}.h264`);
-        await ffmpegRef.current.deleteFile(`${streamType}_stream_${streamIndex}.wav`);
-        console.log(`[FFmpeg Stream Extraction] Cleanup completed`);
-      } catch (cleanupError) {
-        console.warn('[FFmpeg Stream Extraction] Failed to cleanup stream extraction files:', cleanupError);
-      }
+      // Clean up after error
+      await cleanupFFmpegFiles();
     }
-  }, [isLoaded, showProgress, hideProgress, showError]);
+  }, [isLoaded, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
 
   const handleFileSelect = useCallback(async (file: File) => {
     if (!file) return;
 
+    console.log(`[FFMPEG DEBUG] Starting processing for file: ${file.name} (${file.size} bytes)`);
+    
     hideError();
     setMetadata(null);
 
     if (!isLoaded) {
+      console.log(`[FFMPEG DEBUG] FFmpeg not loaded yet, waiting...`);
       showProgress('Waiting for FFmpeg...');
       return;
     }
 
+    console.log(`[FFMPEG DEBUG] FFmpeg loaded, calling extractMetadata`);
     await extractMetadata(file);
   }, [extractMetadata, hideError, isLoaded, showProgress]);
 

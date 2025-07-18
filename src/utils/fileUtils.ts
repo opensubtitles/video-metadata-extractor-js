@@ -13,6 +13,7 @@ export const VIDEO_EXTENSIONS = [
 export const isVideoFile = (file: File): boolean => {
   const fileName = file.name.toLowerCase();
   const hasVideoExtension = VIDEO_EXTENSIONS.some(ext => fileName.endsWith(ext));
+  
   return hasVideoExtension;
 };
 
@@ -92,10 +93,6 @@ export const processDroppedItems = async (items: DataTransferItemList): Promise<
     }
   }
   
-  // Log filtered files for debugging
-  if (filteredFiles.length > 0) {
-    console.log(`[File Filter] Filtered out ${filteredFiles.length} unsupported files:`, filteredFiles);
-  }
   
   return files;
 };
@@ -116,10 +113,6 @@ export const processSelectedFiles = (fileList: FileList): File[] => {
     }
   }
   
-  // Log filtered files for debugging
-  if (filteredFiles.length > 0) {
-    console.log(`[File Filter] Filtered out ${filteredFiles.length} unsupported files:`, filteredFiles);
-  }
   
   return files;
 };

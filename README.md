@@ -24,13 +24,15 @@ Try it online! Just drag and drop any video file to extract comprehensive metada
 - **Audio**: Codec, sample rate, channels, bitrate  
 - **Format**: File size, container format, movie time (milliseconds)
 - **Advanced**: Pixel format, profile information, stream details
+- **Subtitles**: Extract embedded subtitle tracks with language detection
 
 ### 🎨 Professional UI
 - Clean drag & drop interface
-- Real-time processing feedback
+- **Batch processing** → Process multiple files simultaneously with progress tracking
+- Real-time processing feedback with overall progress indicators
 - Comprehensive error handling
 - Responsive design
-- Progress indicators
+- **Stream extraction** → Download individual video/audio streams
 
 ## 🔧 Technical Details
 
@@ -45,6 +47,8 @@ Try it online! Just drag and drop any video file to extract comprehensive metada
 - **Tailwind CSS** for responsive, professional styling
 - **Modular hooks** for separation of concerns
 - **Error boundaries** for graceful failure handling
+- **Batch processing engine** with sequential file processing and progress tracking
+- **Memory management** with automatic cleanup and large file handling
 
 ## 🛠️ Development
 
@@ -79,6 +83,24 @@ npm run preview
 The project is automatically deployed to GitHub Pages via GitHub Actions on every push to the master branch.
 
 **Live URL**: https://opensubtitles.github.io/video-metadata-extractor-js/
+
+## 📋 Changelog
+
+### v1.1.0 (2025-01-18)
+- 🚀 **Batch Processing**: Process multiple files simultaneously with smart progress tracking
+- 📊 **Improved Progress Bar**: Overall progress instead of individual file progress, with close button when complete
+- 🐛 **Fixed Infinite Loop**: Resolved maximum update depth exceeded error during batch processing
+- 🔧 **Enhanced Error Handling**: Better error messages and recovery for failed files
+- 💡 **Debug Logging**: Comprehensive debug output for troubleshooting
+- 🎯 **Better State Management**: Improved file processing queue and state synchronization
+- 🧹 **Memory Management**: Enhanced cleanup and memory efficiency for large file batches
+
+### v1.0.0 (2024-12-XX)
+- 🎉 Initial release with dual processing engine
+- 🎯 MP4Box.js and FFmpeg WASM integration
+- 📊 Comprehensive metadata extraction
+- 🎨 Professional UI with drag & drop
+- 🔧 Stream and subtitle extraction capabilities
 
 ## 🤝 Contributing
 

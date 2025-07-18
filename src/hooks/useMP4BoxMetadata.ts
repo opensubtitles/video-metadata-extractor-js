@@ -7,8 +7,6 @@ const downloadLargeFile = (data: Uint8Array, filename: string, progressCallback?
   const CHUNK_SIZE = 100 * 1024 * 1024; // 100MB chunks
   const MAX_BLOB_SIZE = 2 * 1024 * 1024 * 1024; // 2GB limit
   
-  console.log(`[MP4Box Large File Download] Starting download for ${filename}, size: ${data.length} bytes`);
-  
   // If file is smaller than 2GB, use normal blob download
   if (data.length < MAX_BLOB_SIZE) {
     const blob = new Blob([data], { type: 'application/octet-stream' });
@@ -20,12 +18,8 @@ const downloadLargeFile = (data: Uint8Array, filename: string, progressCallback?
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    console.log(`[MP4Box Large File Download] Normal blob download completed for ${filename}`);
     return;
   }
-  
-  // For files > 2GB, use chunked download via streams
-  console.log(`[MP4Box Large File Download] Using chunked download for ${filename} (${data.length} bytes)`);
   
   // Create a download stream
   const stream = new ReadableStream({
@@ -69,7 +63,6 @@ const downloadLargeFile = (data: Uint8Array, filename: string, progressCallback?
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    console.log(`[MP4Box Large File Download] Chunked download completed for ${filename}`);
   }).catch(error => {
     console.error(`[MP4Box Large File Download] Failed to download ${filename}:`, error);
   });
@@ -280,8 +273,6 @@ export const useMP4BoxMetadata = () => {
       const maxChunkSize = 50 * 1024 * 1024; // 50MB max for MP4Box metadata parsing
       const fileData = fileSize > maxChunkSize ? file.slice(0, maxChunkSize) : file;
       
-      console.log(`[MP4Box] Processing file: ${file.name}, size: ${fileSize} bytes, reading: ${fileData.size} bytes`);
-      
       // Read the file and feed it to MP4Box
       const reader = new FileReader();
       reader.onload = function(e) {
@@ -410,8 +401,6 @@ export const useMP4BoxMetadata = () => {
         const maxChunkSize = 100 * 1024 * 1024; // 100MB max for subtitle extraction
         const fileData = fileSize > maxChunkSize ? file.slice(0, maxChunkSize) : file;
         
-        console.log(`[MP4Box Subtitle] Processing file: ${file.name}, size: ${fileSize} bytes, reading: ${fileData.size} bytes`);
-        
         const reader = new FileReader();
         reader.onload = (e) => {
           const arrayBuffer = e.target?.result as ArrayBuffer;
@@ -480,12 +469,6 @@ export const useMP4BoxMetadata = () => {
 
   const extractStream = useCallback(async (file: File, streamIndex: number, streamType: string, codecName?: string) => {
     const startTime = performance.now();
-    console.log(`[MP4Box Stream Extraction] Starting extraction for ${streamType} stream ${streamIndex}`, {
-      file: file.name,
-      size: file.size,
-      codec: codecName,
-      timestamp: new Date().toISOString()
-    });
 
     try {
       showProgress(`Preparing ${streamType} stream ${streamIndex}...`, 10);
@@ -497,54 +480,34 @@ export const useMP4BoxMetadata = () => {
         let sampleCount = 0;
         
         mp4boxfile.onError = (error: any) => {
-          console.error(`[MP4Box Stream Extraction] MP4Box error:`, error);
           reject(new Error(`MP4Box stream extraction error: ${error.message || 'Unknown error'}`));
         };
         
         mp4boxfile.onReady = (info: any) => {
           try {
-            console.log(`[MP4Box Stream Extraction] File ready, analyzing tracks...`);
             const tracks = info.tracks || [];
-            console.log(`[MP4Box Stream Extraction] Found ${tracks.length} tracks:`, tracks.map((t: any) => ({
-              id: t.id,
-              type: t.type,
-              codec: t.codec,
-              duration: t.duration
-            })));
             
             showProgress(`Analyzing ${streamType} tracks...`, 25);
             
             // Find the target track by type and index
             const typeTracks = tracks.filter((track: any) => track.type === streamType);
-            console.log(`[MP4Box Stream Extraction] Found ${typeTracks.length} ${streamType} tracks:`, typeTracks.map((t: any) => ({ id: t.id, type: t.type, codec: t.codec })));
             
             // Use streamIndex to find the correct track within the type
             targetTrack = typeTracks[streamIndex];
             
             if (!targetTrack) {
-              console.log(`[MP4Box Stream Extraction] Stream index ${streamIndex} not found in ${streamType} tracks, trying direct ID lookup...`);
               targetTrack = tracks.find((track: any) => track.id === streamIndex + 1);
             }
             
             if (!targetTrack) {
-              console.error(`[MP4Box Stream Extraction] ${streamType} stream ${streamIndex} not found in tracks:`, typeTracks);
               reject(new Error(`${streamType} stream ${streamIndex} not found`));
               return;
             }
             
             if (targetTrack.type !== streamType) {
-              console.error(`[MP4Box Stream Extraction] Track ${streamIndex} is type ${targetTrack.type}, expected ${streamType}`);
               reject(new Error(`Track ${streamIndex} is not a ${streamType} stream`));
               return;
             }
-            
-            console.log(`[MP4Box Stream Extraction] Target track found:`, {
-              id: targetTrack.id,
-              type: targetTrack.type,
-              codec: targetTrack.codec,
-              duration: targetTrack.duration,
-              samples: targetTrack.nb_samples
-            });
             
             showProgress(`Extracting ${streamType} stream data...`, 50);
             
@@ -553,17 +516,14 @@ export const useMP4BoxMetadata = () => {
               nbSamples: 10000 // Extract many samples to get complete stream
             });
             
-            console.log(`[MP4Box Stream Extraction] Starting extraction for track ${targetTrack.id}`);
             mp4boxfile.start();
           } catch (err) {
-            console.error(`[MP4Box Stream Extraction] Error in onReady:`, err);
             reject(err);
           }
         };
         
         mp4boxfile.onSamples = (id: number, _user: any, samples: any[]) => {
           if (id === targetTrack?.id) {
-            console.log(`[MP4Box Stream Extraction] Received ${samples.length} samples for track ${id}`);
             samples.forEach((sample: any) => {
               if (sample.data) {
                 extractedData.push(new Uint8Array(sample.data));
@@ -583,14 +543,11 @@ export const useMP4BoxMetadata = () => {
         const maxChunkSize = 200 * 1024 * 1024; // 200MB max for stream extraction
         const fileData = fileSize > maxChunkSize ? file : file; // Use full file for streams
         
-        console.log(`[MP4Box Stream Extraction] Processing file: ${file.name}, size: ${fileSize} bytes, using: ${fileData.size} bytes`);
-        
         const reader = new FileReader();
         reader.onload = (e) => {
           const loadStartTime = performance.now();
           const arrayBuffer = e.target?.result as ArrayBuffer;
           
-          console.log(`[MP4Box Stream Extraction] File loaded: ${arrayBuffer.byteLength} bytes`);
           showProgress(`Loading ${streamType} stream into MP4Box...`, 35);
           
           const buffer = arrayBuffer.slice(0) as any;
@@ -599,11 +556,8 @@ export const useMP4BoxMetadata = () => {
           mp4boxfile.appendBuffer(buffer);
           mp4boxfile.flush();
           
-          console.log(`[MP4Box Stream Extraction] Buffer appended in ${(performance.now() - loadStartTime).toFixed(2)}ms`);
-          
           // Wait for processing to complete
           setTimeout(() => {
-            console.log(`[MP4Box Stream Extraction] Processing timeout reached, extracted ${extractedData.length} chunks, ${sampleCount} samples`);
             
             if (extractedData.length > 0) {
               showProgress(`Preparing ${streamType} stream download...`, 80);
@@ -618,8 +572,6 @@ export const useMP4BoxMetadata = () => {
                 combinedData.set(chunk, offset);
                 offset += chunk.length;
               }
-              
-              console.log(`[MP4Box Stream Extraction] Data combined: ${totalLength} bytes in ${(performance.now() - combineStartTime).toFixed(2)}ms`);
               
               // Determine file extension based on codec
               let fileExt = 'bin';
@@ -643,7 +595,6 @@ export const useMP4BoxMetadata = () => {
               
               // Create download
               const outputFilename = `${streamType}_stream_${streamIndex}.${fileExt}`;
-              console.log(`[MP4Box Stream Extraction] Creating download: ${outputFilename}, ${totalLength} bytes`);
               
               // Use smart download function that handles large files (>2GB)
               downloadLargeFile(combinedData, outputFilename, (progress) => {
@@ -653,47 +604,29 @@ export const useMP4BoxMetadata = () => {
               });
               
               const totalTime = performance.now() - startTime;
-              console.log(`[MP4Box Stream Extraction] Extraction completed successfully in ${totalTime.toFixed(2)}ms`, {
-                outputSize: totalLength,
-                samples: sampleCount,
-                compressionRatio: (totalLength / file.size * 100).toFixed(2) + '%'
-              });
               
               // Show completion message and let user manually close
               showProgress(`${streamType} stream extraction completed successfully! Download should start automatically.`, 100);
               resolve();
             } else {
-              console.error(`[MP4Box Stream Extraction] No stream data extracted after ${sampleCount} samples`);
               reject(new Error('No stream data extracted'));
             }
           }, 3000); // Give more time for processing
         };
         
         reader.onerror = () => {
-          console.error(`[MP4Box Stream Extraction] Failed to read file`);
           reject(new Error('Failed to read file'));
         };
         
-        console.log(`[MP4Box Stream Extraction] Starting file read...`);
         reader.readAsArrayBuffer(fileData);
       });
       
     } catch (err) {
       const totalTime = performance.now() - startTime;
-      console.error(`[MP4Box Stream Extraction] Extraction failed after ${totalTime.toFixed(2)}ms:`, err);
       
       let errorMessage = 'Failed to extract stream with MP4Box';
       if (err instanceof Error) {
         errorMessage = `Failed to extract stream: ${err.message}`;
-        
-        console.error(`[MP4Box Stream Extraction] Error details:`, {
-          message: err.message,
-          stack: err.stack,
-          file: file.name,
-          streamIndex,
-          streamType,
-          codecName
-        });
       }
       
       showError(errorMessage);

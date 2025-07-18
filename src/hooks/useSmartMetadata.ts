@@ -24,12 +24,13 @@ export const useSmartMetadata = () => {
     
     const useMp4Box = shouldUseMp4Box(file);
     
+    
     if (useMp4Box) {
       await mp4boxHook.handleFileSelect(file);
     } else {
       await ffmpegHook.handleFileSelect(file);
     }
-  }, [shouldUseMp4Box, getFileExtension, mp4boxHook, ffmpegHook]);
+  }, [shouldUseMp4Box, mp4boxHook, ffmpegHook]);
 
   // Return the appropriate hook's state based on the selected file
   const currentHook = selectedFile && shouldUseMp4Box(selectedFile) ? mp4boxHook : ffmpegHook;
