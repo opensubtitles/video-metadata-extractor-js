@@ -14,7 +14,9 @@ export const useSmartMetadata = () => {
 
   const shouldUseMp4Box = useCallback((file: File): boolean => {
     const extension = getFileExtension(file.name);
-    return extension === 'mp4' || extension === 'mov' || extension === 'm4v';
+    // MP4Box supports ISO Base Media File Format containers
+    return extension === 'mp4' || extension === 'mov' || extension === 'm4v' || 
+           extension === '3gp' || extension === '3g2' || extension === 'f4v';
   }, [getFileExtension]);
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -38,8 +40,13 @@ export const useSmartMetadata = () => {
     error: currentHook.error,
     handleFileSelect,
     hideError: currentHook.hideError,
+    hideProgress: currentHook.hideProgress,
+    showProgress: currentHook.showProgress,
     isLoaded: currentHook.isLoaded,
     selectedFile,
-    currentMethod: selectedFile ? (shouldUseMp4Box(selectedFile) ? 'MP4Box' : 'FFmpeg') : 'FFmpeg'
+    currentMethod: selectedFile ? (shouldUseMp4Box(selectedFile) ? 'MP4Box' : 'FFmpeg') : 'FFmpeg',
+    // Use the appropriate extraction method based on the processing method
+    extractSubtitle: currentHook.extractSubtitle,
+    extractStream: currentHook.extractStream
   };
 };

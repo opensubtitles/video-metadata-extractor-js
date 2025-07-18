@@ -16,10 +16,26 @@ export interface VideoMetadata {
     width?: number;
     height?: number;
     r_frame_rate?: string;
+    avg_frame_rate?: string;
     pix_fmt?: string;
     bit_rate?: string;
     sample_rate?: string;
     channels?: number;
+    channel_layout?: string;
+    duration?: string;
+    nb_frames?: string;
+    level?: string;
+    codec_tag?: string;
+    codec_tag_string?: string;
+    codec_long_name?: string;
+    // Subtitle-specific properties
+    language?: string;
+    title?: string;
+    forced?: boolean;
+    default?: boolean;
+    index?: number;
+    // Additional metadata fields
+    [key: string]: any;
   }>;
 }
 

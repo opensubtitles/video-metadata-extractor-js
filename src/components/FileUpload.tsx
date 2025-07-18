@@ -1,19 +1,27 @@
 import { useState } from 'react';
+import { processDroppedItems, processSelectedFiles } from '../utils/fileUtils';
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
-  selectedFile: File | null;
+  onMultipleFilesSelect: (files: File[]) => void;
+  selectedFile?: File | null;
   isLoaded?: boolean;
   currentMethod?: string;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFile, isLoaded, currentMethod }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultipleFilesSelect, isLoaded, currentMethod }) => {
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      onFileSelect(file);
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = event.target.files;
+    if (fileList) {
+      const videoFiles = processSelectedFiles(fileList);
+      
+      if (videoFiles.length === 1) {
+        onFileSelect(videoFiles[0]);
+      } else if (videoFiles.length > 1) {
+        onMultipleFilesSelect(videoFiles);
+      }
     }
   };
 
@@ -35,35 +43,40 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFi
     setIsDragOver(false);
   };
 
-  const handleDrop = (event: React.DragEvent<HTMLLabelElement>) => {
+  const handleDrop = async (event: React.DragEvent<HTMLLabelElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(false);
     
-    const files = event.dataTransfer.files;
+    const items = event.dataTransfer.items;
     
-    if (files.length > 0) {
-      const file = files[0];
-      
-      const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.ogv', '.3gp', '.flv', '.wmv', '.m4v'];
-      const fileName = file.name.toLowerCase();
-      const hasVideoExtension = videoExtensions.some(ext => fileName.endsWith(ext));
-      
-      if (file.type.startsWith('video/') || hasVideoExtension) {
-        onFileSelect(file);
-      } else {
-        // Could show an error message to user here if needed
+    if (items) {
+      try {
+        const videoFiles = await processDroppedItems(items);
+        
+        if (videoFiles.length === 1) {
+          onFileSelect(videoFiles[0]);
+        } else if (videoFiles.length > 1) {
+          onMultipleFilesSelect(videoFiles);
+        }
+      } catch (error) {
+        console.error('Error processing dropped items:', error);
+      }
+    } else {
+      // Fallback to regular file handling
+      const files = event.dataTransfer.files;
+      if (files.length > 0) {
+        const videoFiles = processSelectedFiles(files);
+        
+        if (videoFiles.length === 1) {
+          onFileSelect(videoFiles[0]);
+        } else if (videoFiles.length > 1) {
+          onMultipleFilesSelect(videoFiles);
+        }
       }
     }
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
 
   return (
     <div className="mb-8">
@@ -74,6 +87,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFi
           accept="video/*"
           onChange={handleFileChange}
           className="sr-only"
+          multiple
         />
         <label
           htmlFor="videoFile"
@@ -121,22 +135,30 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFi
                     text-2xl font-bold mb-2 transition-colors duration-300
                     ${isDragOver ? 'text-orange-600' : 'text-gray-700'}
                   `}>
-                    {isDragOver ? 'Drop your video here' : 'Upload Video File'}
+                    {isDragOver ? 'Drop your videos here' : 'Upload Video Files'}
                   </h3>
                   <p className={`
                     text-base mb-4 transition-colors duration-300
                     ${isDragOver ? 'text-orange-500' : 'text-gray-500'}
                   `}>
-                    {isDragOver ? 'Release to upload' : 'Drag & drop or click to browse'}
+                    {isDragOver ? 'Release to upload' : 'Drag & drop files/folders or click to browse'}
                   </p>
-                  <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-500 flex-wrap">
                     <span>MP4</span>
                     <span>•</span>
-                    <span>MOV</span>
+                    <span>MKV</span>
                     <span>•</span>
                     <span>AVI</span>
                     <span>•</span>
-                    <span>MKV</span>
+                    <span>MOV</span>
+                    <span>•</span>
+                    <span>WEBM</span>
+                    <span>•</span>
+                    <span>FLV</span>
+                    <span>•</span>
+                    <span>WMV</span>
+                    <span>•</span>
+                    <span className="text-gray-400">and other formats</span>
                   </div>
                 </>
               )}
@@ -145,16 +167,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, selectedFi
         </label>
       </div>
       
-      {selectedFile && (
-        <div className="mt-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-          <p className="text-gray-700 mb-1">
-            File: {selectedFile.name}
-          </p>
-          <p className="text-gray-700">
-            Size: {formatFileSize(selectedFile.size)}
-          </p>
-        </div>
-      )}
     </div>
   );
 };

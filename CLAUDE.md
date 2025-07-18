@@ -37,6 +37,10 @@ npm run lint         # Run TypeScript type checking
 ### Testing
 Run `npm run dev` and open `http://localhost:5173` in browser
 
+### Important Notes
+- **NEVER run server commands automatically** - Always ask the user before starting any development server
+- If you need to restart the server, ask the user first
+
 ## File Structure
 
 ```
