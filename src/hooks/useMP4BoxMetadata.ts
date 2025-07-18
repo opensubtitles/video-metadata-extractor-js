@@ -275,6 +275,13 @@ export const useMP4BoxMetadata = () => {
         }
       };
 
+      // For large files, read only the first chunk needed for metadata
+      const fileSize = file.size;
+      const maxChunkSize = 50 * 1024 * 1024; // 50MB max for MP4Box metadata parsing
+      const fileData = fileSize > maxChunkSize ? file.slice(0, maxChunkSize) : file;
+      
+      console.log(`[MP4Box] Processing file: ${file.name}, size: ${fileSize} bytes, reading: ${fileData.size} bytes`);
+      
       // Read the file and feed it to MP4Box
       const reader = new FileReader();
       reader.onload = function(e) {
@@ -302,7 +309,7 @@ export const useMP4BoxMetadata = () => {
         reject(new Error('Failed to read file'));
       };
 
-      reader.readAsArrayBuffer(file);
+      reader.readAsArrayBuffer(fileData);
     });
   }, [showProgress]);
 
@@ -398,7 +405,13 @@ export const useMP4BoxMetadata = () => {
           }
         };
         
-        // Process the file
+        // Process the file (use chunked reading for large files)
+        const fileSize = file.size;
+        const maxChunkSize = 100 * 1024 * 1024; // 100MB max for subtitle extraction
+        const fileData = fileSize > maxChunkSize ? file.slice(0, maxChunkSize) : file;
+        
+        console.log(`[MP4Box Subtitle] Processing file: ${file.name}, size: ${fileSize} bytes, reading: ${fileData.size} bytes`);
+        
         const reader = new FileReader();
         reader.onload = (e) => {
           const arrayBuffer = e.target?.result as ArrayBuffer;
@@ -439,7 +452,7 @@ export const useMP4BoxMetadata = () => {
         };
         
         reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsArrayBuffer(file);
+        reader.readAsArrayBuffer(fileData);
       });
       
     } catch (err) {
@@ -565,7 +578,13 @@ export const useMP4BoxMetadata = () => {
           }
         };
         
-        // Process the file
+        // Process the file (use full file for stream extraction to ensure complete streams)
+        const fileSize = file.size;
+        const maxChunkSize = 200 * 1024 * 1024; // 200MB max for stream extraction
+        const fileData = fileSize > maxChunkSize ? file : file; // Use full file for streams
+        
+        console.log(`[MP4Box Stream Extraction] Processing file: ${file.name}, size: ${fileSize} bytes, using: ${fileData.size} bytes`);
+        
         const reader = new FileReader();
         reader.onload = (e) => {
           const loadStartTime = performance.now();
@@ -656,7 +675,7 @@ export const useMP4BoxMetadata = () => {
         };
         
         console.log(`[MP4Box Stream Extraction] Starting file read...`);
-        reader.readAsArrayBuffer(file);
+        reader.readAsArrayBuffer(fileData);
       });
       
     } catch (err) {

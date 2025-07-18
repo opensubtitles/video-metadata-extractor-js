@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { processDroppedItems, processSelectedFiles } from '../utils/fileUtils';
+import { VERSION } from '../version';
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
@@ -104,6 +105,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
+          {/* Version in top right corner */}
+          <div className="absolute top-4 right-4 text-xs text-gray-400 font-mono">
+            v{VERSION}
+          </div>
           <div className="flex flex-col items-center gap-6">
             <div className={`
               w-20 h-20 rounded-xl flex items-center justify-center shadow-md transition-all duration-300
@@ -158,7 +163,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
                     <span>•</span>
                     <span>WMV</span>
                     <span>•</span>
-                    <span className="text-gray-400">and other formats</span>
+                    <span className="text-gray-400">and other video formats</span>
                   </div>
                 </>
               )}

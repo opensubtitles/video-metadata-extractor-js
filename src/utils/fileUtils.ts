@@ -1,19 +1,19 @@
 // Utility functions for file handling
 
-// Video file extensions
+// Video file extensions - only supported formats
 export const VIDEO_EXTENSIONS = [
-  '.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v', 
-  '.ogv', '.3gp', '.3g2', '.asf', '.divx', '.f4v', '.m2ts', '.mts', 
-  '.ts', '.vob', '.rmvb', '.rm', '.qt'
+  '.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v',
+  '.ogv', '.3gp', '.3g2', '.f4v'
 ];
 
 /**
- * Check if a file is a video file based on extension and MIME type
+ * Check if a file is a supported video file based on extension only
+ * Only accepts formats that are explicitly supported by the metadata extractor
  */
 export const isVideoFile = (file: File): boolean => {
   const fileName = file.name.toLowerCase();
   const hasVideoExtension = VIDEO_EXTENSIONS.some(ext => fileName.endsWith(ext));
-  return file.type.startsWith('video/') || hasVideoExtension;
+  return hasVideoExtension;
 };
 
 /**
@@ -70,6 +70,7 @@ export const getFileFromEntry = (entry: FileSystemFileEntry): Promise<File> => {
  */
 export const processDroppedItems = async (items: DataTransferItemList): Promise<File[]> => {
   const files: File[] = [];
+  const filteredFiles: string[] = [];
   
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -81,12 +82,19 @@ export const processDroppedItems = async (items: DataTransferItemList): Promise<
         const file = await getFileFromEntry(entry as FileSystemFileEntry);
         if (isVideoFile(file)) {
           files.push(file);
+        } else {
+          filteredFiles.push(file.name);
         }
       } else if (entry?.isDirectory) {
         const dirFiles = await scanDirectory(entry as FileSystemDirectoryEntry);
         files.push(...dirFiles);
       }
     }
+  }
+  
+  // Log filtered files for debugging
+  if (filteredFiles.length > 0) {
+    console.log(`[File Filter] Filtered out ${filteredFiles.length} unsupported files:`, filteredFiles);
   }
   
   return files;
@@ -97,12 +105,20 @@ export const processDroppedItems = async (items: DataTransferItemList): Promise<
  */
 export const processSelectedFiles = (fileList: FileList): File[] => {
   const files: File[] = [];
+  const filteredFiles: string[] = [];
   
   for (let i = 0; i < fileList.length; i++) {
     const file = fileList[i];
     if (isVideoFile(file)) {
       files.push(file);
+    } else {
+      filteredFiles.push(file.name);
     }
+  }
+  
+  // Log filtered files for debugging
+  if (filteredFiles.length > 0) {
+    console.log(`[File Filter] Filtered out ${filteredFiles.length} unsupported files:`, filteredFiles);
   }
   
   return files;

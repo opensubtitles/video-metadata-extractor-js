@@ -214,11 +214,41 @@ export const useVideoMetadata = () => {
         throw new Error('File appears to be empty');
       }
       
-      // Check if file has a valid extension
-      const validExtensions = ['mp4', 'avi', 'mov', 'mkv', 'wmv', 'flv', 'webm', '3gp', '3g2', 'f4v', 'm4v', 'ogv', 'mp3', 'wav', 'aac'];
+      // Check if file has a valid extension based on FFmpeg demuxers
+      const validExtensions = [
+        // Common video formats
+        'mp4', 'm4v', 'mov', '3gp', '3g2', 'mj2',  // QuickTime/MOV family
+        'avi',                                      // AVI
+        'mkv', 'webm',                             // Matroska/WebM
+        'flv',                                     // Flash Video
+        'asf', 'wmv',                              // Windows Media
+        'mpg', 'mpeg', 'ts', 'm2ts',              // MPEG formats
+        'ogv', 'ogg',                              // Ogg
+        'gif',                                     // GIF
+        'swf',                                     // SWF
+        'rm', 'rmvb',                              // RealMedia
+        'dv',                                      // DV
+        'mxf',                                     // MXF
+        'nut',                                     // NUT
+        'nuv',                                     // NuppelVideo
+        'roq',                                     // id RoQ
+        'nsv',                                     // Nullsoft Streaming Video
+        'wtv',                                     // Windows Television
+        'ty',                                      // TiVo
+        'pva',                                     // TechnoTrend PVA
+        'ivf',                                     // On2 IVF
+        'yuv',                                     // YUV4MPEG
+        'r3d',                                     // REDCODE R3D
+        
+        // Audio formats that may contain video
+        'aac', 'mp3', 'flac', 'wav', 'wv', 'ape', 'mpc', 'tta', 'tak',
+        'au', 'caf', 'w64', 'voc', 'aiff', 'gsm', 'amr', 'ac3', 'eac3',
+        'dts', 'dtshd', 'truehd', 'mlp', 'opus', 'vorbis', 'spx'
+      ];
+      
       const extension = file.name.split('.').pop()?.toLowerCase();
       if (!extension || !validExtensions.includes(extension)) {
-        throw new Error(`Unsupported file format: ${extension || 'unknown'}. Supported formats: ${validExtensions.join(', ')}`);
+        throw new Error(`Unsupported file format: ${extension || 'unknown'}. Supported formats include: mp4, avi, mov, mkv, webm, flv, 3gp, wmv, mpg, ogg, and many others.`);
       }
       
       // Smart chunking strategy for different file types
@@ -226,9 +256,9 @@ export const useVideoMetadata = () => {
       let fileData: Blob;
       
       if (extension === 'mp4' || extension === 'm4v') {
-        // Use whole-file strategy for MP4 files
+        // Use whole-file strategy for MP4-based files
         fileData = processMP4File(file);
-        showProgress('Processing MP4 file...');
+        showProgress(`Processing ${extension.toUpperCase()} file...`);
       } else if (fileSize <= chunkSize) {
         // Small file - use entire file
         fileData = file;
