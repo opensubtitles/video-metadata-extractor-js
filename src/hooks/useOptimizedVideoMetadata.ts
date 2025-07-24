@@ -554,19 +554,34 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
     const initializeFFmpeg = async () => {
       const ffmpeg = ffmpegRef.current;
       
+      console.log('[FFMPEG DEBUG] Initializing FFmpeg...');
+      
       if (ffmpeg.loaded) {
+        console.log('[FFMPEG DEBUG] FFmpeg already loaded');
         setIsLoaded(true);
         return;
       }
 
       try {
-        await ffmpeg.load({
-          coreURL: await toBlobURL(FFMPEG_CONSTANTS.CORE_URLS.CORE_JS, 'text/javascript'),
-          wasmURL: await toBlobURL(FFMPEG_CONSTANTS.CORE_URLS.WASM, 'application/wasm'),
+        console.log('[FFMPEG DEBUG] Loading FFmpeg with URLs:', {
+          coreURL: FFMPEG_CONSTANTS.CORE_URLS.CORE_JS,
+          wasmURL: FFMPEG_CONSTANTS.CORE_URLS.WASM
         });
         
+        const coreURL = await toBlobURL(FFMPEG_CONSTANTS.CORE_URLS.CORE_JS, 'text/javascript');
+        const wasmURL = await toBlobURL(FFMPEG_CONSTANTS.CORE_URLS.WASM, 'application/wasm');
+        
+        console.log('[FFMPEG DEBUG] Blob URLs created:', { coreURL, wasmURL });
+        
+        await ffmpeg.load({
+          coreURL,
+          wasmURL,
+        });
+        
+        console.log('[FFMPEG DEBUG] FFmpeg loaded successfully');
         setIsLoaded(true);
       } catch (err) {
+        console.error('[FFMPEG DEBUG] Failed to load FFmpeg:', err);
         const errorMessage = err instanceof Error ? err.message : ERROR_MESSAGES.FFMPEG.INIT_FAILED;
         showError(`Failed to initialize FFmpeg: ${errorMessage}`);
       }
