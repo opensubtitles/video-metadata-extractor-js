@@ -141,7 +141,8 @@ const OptimizedApp: React.FC = () => {
     
     // Update progress
     const currentIndex = items.length - queue.length + 1;
-    const baseProgress = ((currentIndex - 1) / items.length) * 100;
+    const progressPerFile = 100 / items.length;
+    const baseProgress = (currentIndex - 1) * progressPerFile;
     
     setBatchProgress(prev => ({
       ...prev,
@@ -235,10 +236,13 @@ const OptimizedApp: React.FC = () => {
       const currentIndex = batchProgress.currentFile;
       const totalFiles = batchProgress.totalFiles;
       
-      // Calculate overall progress: completed files + current file progress
-      const completedFilesProgress = ((currentIndex - 1) / totalFiles) * 100;
-      const currentFileProgress = (progress.progress / totalFiles);
-      const overallProgress = completedFilesProgress + currentFileProgress;
+      // Calculate progress ranges for each file
+      // File 1: 0-50%, File 2: 50-100% (for 2 files)
+      // File 1: 0-33%, File 2: 33-66%, File 3: 66-100% (for 3 files)
+      const progressPerFile = 100 / totalFiles;
+      const fileStartProgress = (currentIndex - 1) * progressPerFile;
+      const fileProgressContribution = (progress.progress / 100) * progressPerFile;
+      const overallProgress = fileStartProgress + fileProgressContribution;
       
       setBatchProgress(prev => ({
         ...prev,
