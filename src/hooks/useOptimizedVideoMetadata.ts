@@ -48,6 +48,7 @@ interface UseOptimizedVideoMetadataResult {
 export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => {
   // State management
   const ffmpegRef = useRef(new FFmpeg());
+  const initializingRef = useRef(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -565,6 +566,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       
       console.log('[FFMPEG DEBUG] FFmpeg ref:', ffmpeg);
       console.log('[FFMPEG DEBUG] FFmpeg loaded status:', ffmpeg.loaded);
+      console.log('[FFMPEG DEBUG] Already initializing?', initializingRef.current);
       
       if (ffmpeg.loaded) {
         console.log('[FFMPEG DEBUG] FFmpeg already loaded, setting isLoaded to true');
@@ -572,30 +574,66 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
         return;
       }
 
+      if (initializingRef.current) {
+        console.log('[FFMPEG DEBUG] Already initializing, skipping duplicate call');
+        return;
+      }
+
+      initializingRef.current = true;
+
       try {
-        // Use the same pattern as the original working hook
-        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-        console.log('[FFMPEG DEBUG] Using baseURL:', baseURL);
+        // First try without toBlobURL to test if that's the issue
+        console.log('[FFMPEG DEBUG] Trying direct URLs without toBlobURL...');
         
-        const coreJSUrl = `${baseURL}/ffmpeg-core.js`;
-        const wasmUrl = `${baseURL}/ffmpeg-core.wasm`;
-        console.log('[FFMPEG DEBUG] Fetching URLs:', { coreJSUrl, wasmUrl });
-        
-        console.log('[FFMPEG DEBUG] Creating blob URLs...');
-        const coreURL = await toBlobURL(coreJSUrl, 'text/javascript');
-        const wasmURL = await toBlobURL(wasmUrl, 'application/wasm');
-        console.log('[FFMPEG DEBUG] Blob URLs created:', { coreURL, wasmURL });
-        
-        console.log('[FFMPEG DEBUG] Calling ffmpeg.load()...');
-        await ffmpeg.load({
-          coreURL,
-          wasmURL,
-        });
+        try {
+          await ffmpeg.load();
+          console.log('[FFMPEG DEBUG] FFmpeg loaded with default URLs successfully');
+        } catch (directError) {
+          console.log('[FFMPEG DEBUG] Direct load failed, trying with toBlobURL...');
+          
+          const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+          console.log('[FFMPEG DEBUG] Using baseURL:', baseURL);
+          
+          const coreJSUrl = `${baseURL}/ffmpeg-core.js`;
+          const wasmUrl = `${baseURL}/ffmpeg-core.wasm`;
+          console.log('[FFMPEG DEBUG] Fetching URLs:', { coreJSUrl, wasmUrl });
+          
+          console.log('[FFMPEG DEBUG] Creating blob URLs...');
+          let coreURL, wasmURL;
+          
+          try {
+            console.log('[FFMPEG DEBUG] Fetching core JS...');
+            coreURL = await Promise.race([
+              toBlobURL(coreJSUrl, 'text/javascript'),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Core JS fetch timeout after 30s')), 30000))
+            ]);
+            console.log('[FFMPEG DEBUG] Core JS blob URL created:', coreURL);
+            
+            console.log('[FFMPEG DEBUG] Fetching WASM...');
+            wasmURL = await Promise.race([
+              toBlobURL(wasmUrl, 'application/wasm'),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('WASM fetch timeout after 30s')), 30000))
+            ]);
+            console.log('[FFMPEG DEBUG] WASM blob URL created:', wasmURL);
+            
+            console.log('[FFMPEG DEBUG] Both blob URLs created successfully');
+          } catch (blobError) {
+            console.error('[FFMPEG DEBUG] Failed to create blob URLs:', blobError);
+            throw new Error(`Failed to fetch FFmpeg resources: ${blobError instanceof Error ? blobError.message : 'Unknown error'}`);
+          }
+          
+          console.log('[FFMPEG DEBUG] Calling ffmpeg.load() with blob URLs...');
+          await ffmpeg.load({
+            coreURL,
+            wasmURL,
+          });
+        }
         
         console.log('[FFMPEG DEBUG] FFmpeg.load() completed successfully');
         console.log('[FFMPEG DEBUG] FFmpeg loaded status after load:', ffmpeg.loaded);
         setIsLoaded(true);
         console.log('[FFMPEG DEBUG] setIsLoaded(true) called');
+        initializingRef.current = false;
       } catch (err) {
         console.error('[FFMPEG DEBUG] Failed to load FFmpeg:', err);
         console.error('[FFMPEG DEBUG] Error details:', {
@@ -621,6 +659,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
         
         console.log('[FFMPEG DEBUG] Showing error:', errorMessage);
         showError(errorMessage);
+        initializingRef.current = false;
       }
     };
 
