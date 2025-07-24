@@ -239,7 +239,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
 
   // Extract metadata from file
   const extractMetadata = useCallback(async (file: File) => {
-    if (!isLoaded) return;
+    if (!ffmpegRef.current.loaded) return;
 
     // Validate file
     const validation = validateFile(file);
@@ -326,7 +326,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       hideProgress();
       throw error;
     }
-  }, [isLoaded, showProgress, hideProgress, showError, cleanupFFmpegFiles, parseMetadataFromLogs]);
+  }, [showProgress, hideProgress, showError, cleanupFFmpegFiles, parseMetadataFromLogs]);
 
   // Extract single subtitle
   const extractSubtitle = useCallback(async (
@@ -336,7 +336,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
     codecName?: string, 
     isForced?: boolean
   ) => {
-    if (!isLoaded) return;
+    if (!ffmpegRef.current.loaded) return;
 
     try {
       showProgress(`Extracting subtitle track ${streamIndex}...`, 10);
@@ -410,11 +410,11 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       showError(`Subtitle extraction failed: ${errorMessage}`);
       hideProgress();
     }
-  }, [isLoaded, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
+  }, [showProgress, hideProgress, showError, cleanupFFmpegFiles]);
 
   // Extract all subtitles as ZIP
   const extractAllSubtitles = useCallback(async (file: File) => {
-    if (!isLoaded || !metadata) return;
+    if (!ffmpegRef.current.loaded || !metadata) return;
 
     try {
       showProgress('Preparing batch subtitle extraction...', 5);
@@ -533,12 +533,11 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       showError(`Batch extraction failed: ${errorMessage}`);
       hideProgress();
     }
-  }, [isLoaded, metadata, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
+  }, [metadata, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
 
   // Handle file selection
   const handleFileSelect = useCallback(async (file: File) => {
     console.log('[HOOK DEBUG] handleFileSelect called with file:', file.name);
-    console.log('[HOOK DEBUG] Current isLoaded state:', isLoaded);
     console.log('[HOOK DEBUG] FFmpeg ref loaded status:', ffmpegRef.current.loaded);
     
     if (!file) {
@@ -550,11 +549,8 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
     setMetadata(null);
     setSelectedFile(null);
 
-    // Check both isLoaded state and actual FFmpeg status
-    const actuallyLoaded = isLoaded && ffmpegRef.current.loaded;
-    console.log('[HOOK DEBUG] Actually loaded?', actuallyLoaded);
-
-    if (!actuallyLoaded) {
+    // Use only FFmpeg ref status as source of truth
+    if (!ffmpegRef.current.loaded) {
       console.log('[HOOK DEBUG] FFmpeg not ready, waiting...');
       showProgress('Waiting for FFmpeg to load...');
       
@@ -578,7 +574,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
 
     console.log('[HOOK DEBUG] FFmpeg is loaded, calling extractMetadata');
     await extractMetadata(file);
-  }, [extractMetadata, hideError, isLoaded, showProgress]);
+  }, [extractMetadata, hideError, showError, showProgress]);
 
   // Initialize FFmpeg
   useEffect(() => {
@@ -675,7 +671,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
 
   // Extract video/audio streams
   const extractStream = useCallback(async (file: File, streamIndex: number, streamType: string) => {
-    if (!isLoaded) return;
+    if (!ffmpegRef.current.loaded) return;
     try {
       showProgress(`Preparing ${streamType} stream ${streamIndex}...`, 10);
       
@@ -733,7 +729,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       showError(`Failed to extract ${streamType} stream: ${error instanceof Error ? error.message : 'Unknown error'}`);
       await cleanupFFmpegFiles();
     }
-  }, [isLoaded, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
+  }, [showProgress, hideProgress, showError, cleanupFFmpegFiles]);
 
   return {
     metadata,
