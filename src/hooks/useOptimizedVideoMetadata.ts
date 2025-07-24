@@ -582,52 +582,36 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       initializingRef.current = true;
 
       try {
-        // First try without toBlobURL to test if that's the issue
-        console.log('[FFMPEG DEBUG] Trying direct URLs without toBlobURL...');
+        // Use locally cached FFmpeg files to avoid network dependencies
+        console.log('[FFMPEG DEBUG] Using locally cached FFmpeg files...');
         
-        try {
-          await ffmpeg.load();
-          console.log('[FFMPEG DEBUG] FFmpeg loaded with default URLs successfully');
-        } catch (directError) {
-          console.log('[FFMPEG DEBUG] Direct load failed, trying with toBlobURL...');
-          
-          const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-          console.log('[FFMPEG DEBUG] Using baseURL:', baseURL);
-          
-          const coreJSUrl = `${baseURL}/ffmpeg-core.js`;
-          const wasmUrl = `${baseURL}/ffmpeg-core.wasm`;
-          console.log('[FFMPEG DEBUG] Fetching URLs:', { coreJSUrl, wasmUrl });
-          
-          console.log('[FFMPEG DEBUG] Creating blob URLs...');
-          let coreURL, wasmURL;
-          
-          try {
-            console.log('[FFMPEG DEBUG] Fetching core JS...');
-            coreURL = await Promise.race([
-              toBlobURL(coreJSUrl, 'text/javascript'),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Core JS fetch timeout after 30s')), 30000))
-            ]);
-            console.log('[FFMPEG DEBUG] Core JS blob URL created:', coreURL);
-            
-            console.log('[FFMPEG DEBUG] Fetching WASM...');
-            wasmURL = await Promise.race([
-              toBlobURL(wasmUrl, 'application/wasm'),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('WASM fetch timeout after 30s')), 30000))
-            ]);
-            console.log('[FFMPEG DEBUG] WASM blob URL created:', wasmURL);
-            
-            console.log('[FFMPEG DEBUG] Both blob URLs created successfully');
-          } catch (blobError) {
-            console.error('[FFMPEG DEBUG] Failed to create blob URLs:', blobError);
-            throw new Error(`Failed to fetch FFmpeg resources: ${blobError instanceof Error ? blobError.message : 'Unknown error'}`);
-          }
-          
-          console.log('[FFMPEG DEBUG] Calling ffmpeg.load() with blob URLs...');
-          await ffmpeg.load({
-            coreURL,
-            wasmURL,
-          });
-        }
+        // Get the base URL for the current app (handles both dev and production)
+        const baseURL = window.location.origin + window.location.pathname;
+        const ffmpegBaseURL = `${baseURL}ffmpeg`;
+        
+        const coreJSUrl = `${ffmpegBaseURL}/ffmpeg-core.js`;
+        const wasmUrl = `${ffmpegBaseURL}/ffmpeg-core.wasm`;
+        const workerUrl = `${ffmpegBaseURL}/ffmpeg-core.worker.js`;
+        
+        console.log('[FFMPEG DEBUG] Local FFmpeg URLs:', { 
+          coreJSUrl, 
+          wasmUrl, 
+          workerUrl,
+          baseURL,
+          ffmpegBaseURL 
+        });
+        
+        console.log('[FFMPEG DEBUG] Creating blob URLs from local files...');
+        const coreURL = await toBlobURL(coreJSUrl, 'text/javascript');
+        const wasmURL = await toBlobURL(wasmUrl, 'application/wasm');
+        
+        console.log('[FFMPEG DEBUG] Local blob URLs created successfully:', { coreURL, wasmURL });
+        
+        console.log('[FFMPEG DEBUG] Loading FFmpeg with local files...');
+        await ffmpeg.load({
+          coreURL,
+          wasmURL,
+        });
         
         console.log('[FFMPEG DEBUG] FFmpeg.load() completed successfully');
         console.log('[FFMPEG DEBUG] FFmpeg loaded status after load:', ffmpeg.loaded);
