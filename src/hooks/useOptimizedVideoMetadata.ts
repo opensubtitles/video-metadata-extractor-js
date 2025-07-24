@@ -37,6 +37,7 @@ interface UseOptimizedVideoMetadataResult {
   error: ErrorState;
   handleFileSelect: (file: File) => Promise<void>;
   extractSubtitle: (file: File, streamIndex: number, language?: string, codecName?: string, isForced?: boolean) => Promise<void>;
+  extractStream: (file: File, streamIndex: number, streamType: string) => Promise<void>;
   extractAllSubtitles: (file: File) => Promise<void>;
   hideError: () => void;
   hideProgress: () => void;
@@ -651,12 +652,79 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
     initializeFFmpeg();
   }, [showError]);
 
+  // Extract video/audio streams
+  const extractStream = useCallback(async (file: File, streamIndex: number, streamType: string) => {
+    if (!isLoaded) return;
+    try {
+      showProgress(`Preparing ${streamType} stream ${streamIndex}...`, 10);
+      
+      // Add small delay to ensure progress bar is visible
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Clean up before extraction
+      await cleanupFFmpegFiles();
+      
+      // For stream extraction, use smaller chunks for memory safety
+      const fileSize = file.size;
+      const maxChunkSize = 100 * 1024 * 1024; // 100MB max for stream extraction (reduced for memory safety)
+      const fileData = fileSize <= maxChunkSize ? file : file.slice(0, maxChunkSize);
+      
+      // Write file to FFmpeg virtual filesystem
+      showProgress(`Loading ${streamType} stream into FFmpeg...`, 25);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      const inputFileName = `input_${Date.now()}.${file.name.split('.').pop()}`;
+      const outputFileName = `output_${streamType}_${streamIndex}_${Date.now()}.${streamType === 'video' ? 'mp4' : 'aac'}`;
+      
+      await ffmpegRef.current.writeFile(inputFileName, await fetchFile(fileData));
+      
+      // Extract the specific stream
+      showProgress(`Extracting ${streamType} stream ${streamIndex}...`, 50);
+      
+      const command = streamType === 'video' 
+        ? ['-i', inputFileName, '-map', `0:${streamIndex}`, '-c', 'copy', outputFileName]
+        : ['-i', inputFileName, '-map', `0:${streamIndex}`, '-c', 'copy', outputFileName];
+      
+      await ffmpegRef.current.exec(command);
+      
+      showProgress(`Preparing ${streamType} download...`, 85);
+      
+      // Read the output file
+      const data = await ffmpegRef.current.readFile(outputFileName);
+      const blob = new Blob([data], { 
+        type: streamType === 'video' ? 'video/mp4' : 'audio/aac' 
+      });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${file.name.replace(/\.[^/.]+$/, '')}_${streamType}_${streamIndex}.${streamType === 'video' ? 'mp4' : 'aac'}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showProgress(`${streamType} stream extracted successfully!`, 100);
+      
+      // Clean up
+      await cleanupFFmpegFiles();
+      setTimeout(hideProgress, 2000);
+      
+    } catch (error) {
+      console.error(`[EXTRACT STREAM] Error extracting ${streamType} stream:`, error);
+      showError(`Failed to extract ${streamType} stream: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      await cleanupFFmpegFiles();
+    }
+  }, [isLoaded, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
+
   return {
     metadata,
     progress,
     error,
     handleFileSelect,
     extractSubtitle,
+    extractStream,
     extractAllSubtitles,
     hideError,
     hideProgress,
