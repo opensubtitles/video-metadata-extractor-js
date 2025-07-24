@@ -1,7 +1,7 @@
 {
   "name": "video-metadata-extractor",
-  "version": "1.1.0",
-  "description": "A browser-based video metadata extractor that uses FFmpeg WASM to analyze video files and extract comprehensive metadata information.",
+  "version": "1.0.1",
+  "description": "A browser-based video metadata extractor and subtitle extractor that uses FFmpeg WASM to analyze video files, extract comprehensive metadata information, and extract subtitle tracks from MKV/WebM files with memory-safe processing of files of any size using chunked streaming.",
   "main": "index.html",
   "scripts": {
     "dev": "vite --port 5180",
@@ -15,6 +15,7 @@
   "type": "module",
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.11",
+    "@types/jszip": "^3.4.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
@@ -27,6 +28,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "jszip": "^3.10.1",
     "mp4box": "^1.4.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

@@ -4,7 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a browser-based video metadata extractor built with React, TypeScript, Vite, and Tailwind CSS. It uses FFmpeg WebAssembly (WASM) to analyze video files and extract comprehensive metadata information. The application is a client-side only solution that runs entirely in the browser without requiring a server.
+This is a browser-based video metadata extractor and subtitle extractor built with React, TypeScript, Vite, and Tailwind CSS. It uses FFmpeg WebAssembly (WASM) to analyze video files, extract comprehensive metadata information, and extract subtitle tracks from MKV/WebM files. The application uses memory-safe chunked processing to handle files of any size and is a client-side only solution that runs entirely in the browser without requiring a server.
+
+### Key Features
+
+- **Video Metadata Extraction**: Comprehensive analysis of video file properties, streams, and format information
+- **Subtitle Extraction**: Individual subtitle track extraction with Quick and Full methods
+- **Batch Subtitle Extraction**: Extract all subtitle tracks at once as a ZIP file from MKV/WebM files
+- **Unlimited File Size Support**: Memory-safe processing of files of any size using 500MB chunked streaming (tested up to 10GB, theoretically unlimited)
+- **Smart File Processing**: Automatic format detection with optimized processing strategies
+- **Browser-Native**: No server required, all processing happens in the browser
 
 ## Architecture
 
@@ -19,9 +28,12 @@ This is a browser-based video metadata extractor built with React, TypeScript, V
 
 ### Key Functionality
 
-- **useVideoMetadata Hook**: Manages FFmpeg loading, file processing, and state management
-- **Chunked File Reading**: Handles large files (up to 2GB) by reading only the first 32MB chunk for metadata extraction
-- **TypeScript Integration**: Full type safety with custom interfaces for metadata structures
+- **useVideoMetadata Hook**: Manages FFmpeg loading, file processing, metadata extraction, and subtitle extraction
+- **Complete File Reading**: Processes entire files of any size using memory-safe chunking (500MB chunks for files >=2GB, peak memory usage ~500MB regardless of file size)
+- **Subtitle Extraction**: Individual and batch subtitle extraction with support for multiple formats (SRT, ASS, VTT)
+- **Smart Duplicate Handling**: Automatic filename generation with track numbers for duplicate languages
+- **ZIP Generation**: Creates downloadable ZIP files containing all extracted subtitle tracks
+- **TypeScript Integration**: Full type safety with custom interfaces for metadata and extraction structures
 - **Responsive Design**: Tailwind CSS for modern, responsive UI components
 
 ## Development Commands

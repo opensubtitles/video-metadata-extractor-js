@@ -5,10 +5,12 @@ interface MetadataDisplayProps {
   metadata: VideoMetadata | null;
   selectedFile?: File | null;
   extractSubtitle?: (file: File, streamIndex: number, language?: string, codecName?: string, isForced?: boolean) => Promise<void>;
+  extractSubtitleFull?: (file: File, streamIndex: number, language?: string, codecName?: string, isForced?: boolean) => Promise<void>;
   extractStream?: (file: File, streamIndex: number, streamType: string, codecName?: string) => Promise<void>;
+  extractAllSubtitles?: (file: File) => Promise<void>;
 }
 
-export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, selectedFile, extractSubtitle, extractStream }) => {
+export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, selectedFile, extractSubtitle, extractSubtitleFull, extractStream, extractAllSubtitles }) => {
   if (!metadata) return null;
 
 
@@ -70,9 +72,31 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
     );
   };
 
+  // Check if we should show the Extract All Subtitles button
+  const subtitleStreams = metadata.streams?.filter(stream => stream.codec_type === 'subtitle') || [];
+  const showExtractAllButton = selectedFile && extractAllSubtitles && subtitleStreams.length > 0 && 
+    (selectedFile.name.toLowerCase().endsWith('.mkv') || selectedFile.name.toLowerCase().endsWith('.webm'));
+
+  const handleExtractAllSubtitles = async () => {
+    if (selectedFile && extractAllSubtitles) {
+      await extractAllSubtitles(selectedFile);
+    }
+  };
+
   return (
     <div className="mt-8">
-      <h2 className="text-3xl font-bold text-gray-800 mb-6">Video Metadata</h2>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold text-gray-800">Video Metadata</h2>
+        {showExtractAllButton && (
+          <button
+            onClick={handleExtractAllSubtitles}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg shadow-lg transition-colors font-semibold text-lg"
+            title={`Extract all ${subtitleStreams.length} subtitle tracks as ZIP`}
+          >
+            Extract All Subtitles ({subtitleStreams.length})
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
 
@@ -152,6 +176,9 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
             if (stream.title) streamInfo['Title'] = stream.title;
             streamInfo['Default'] = stream.default ? 'Yes' : 'No';
             streamInfo['Forced'] = stream.forced ? 'Yes' : 'No';
+            if (stream.size && stream.size !== 'unknown') {
+              streamInfo['Size'] = formatFileSize(stream.size);
+            }
             if (stream.duration) streamInfo['Duration'] = stream.duration;
             if (stream.codec_tag) streamInfo['Codec Tag'] = stream.codec_tag;
             if (stream.codec_tag_string) streamInfo['Codec Tag String'] = stream.codec_tag_string;
@@ -161,6 +188,12 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
           const handleDownloadSubtitle = async () => {
             if (selectedFile && extractSubtitle && stream.codec_type === 'subtitle' && stream.index !== undefined) {
               await extractSubtitle(selectedFile, stream.index, stream.language, stream.codec_name, stream.forced);
+            }
+          };
+
+          const handleDownloadSubtitleFull = async () => {
+            if (selectedFile && extractSubtitleFull && stream.codec_type === 'subtitle' && stream.index !== undefined) {
+              await extractSubtitleFull(selectedFile, stream.index, stream.language, stream.codec_name, stream.forced);
             }
           };
 
@@ -179,13 +212,24 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
                 data={streamInfo}
               />
               {stream.codec_type === 'subtitle' && selectedFile && extractSubtitle && (
-                <button
-                  onClick={handleDownloadSubtitle}
-                  className="absolute top-2 right-2 bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors"
-                  title="Download subtitle file"
-                >
-                  Download
-                </button>
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <button
+                    onClick={handleDownloadSubtitle}
+                    className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors"
+                    title="Quick subtitle extraction (chunked)"
+                  >
+                    Quick
+                  </button>
+                  {extractSubtitleFull && (
+                    <button
+                      onClick={handleDownloadSubtitleFull}
+                      className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors"
+                      title="Full subtitle extraction (complete file analysis)"
+                    >
+                      Full
+                    </button>
+                  )}
+                </div>
               )}
               {(stream.codec_type === 'video' || stream.codec_type === 'audio') && selectedFile && extractStream && (
                 <button

@@ -34,6 +34,7 @@ export interface VideoMetadata {
     forced?: boolean;
     default?: boolean;
     index?: number;
+    size?: string;
     // Additional metadata fields
     [key: string]: any;
   }>;
