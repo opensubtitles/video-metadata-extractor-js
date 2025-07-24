@@ -24,7 +24,6 @@
     "lint": "tsc --noEmit",
     "version:sync": "node scripts/update-version.js",
     "build:npm": "tsc --project tsconfig.npm.json",
-    "prepare": "npm run build:npm",
     "prepublishOnly": "npm run version:sync && npm run lint && npm run build:npm"
   },
   "keywords": [
