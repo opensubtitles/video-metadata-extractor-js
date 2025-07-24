@@ -539,6 +539,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
   const handleFileSelect = useCallback(async (file: File) => {
     console.log('[HOOK DEBUG] handleFileSelect called with file:', file.name);
     console.log('[HOOK DEBUG] Current isLoaded state:', isLoaded);
+    console.log('[HOOK DEBUG] FFmpeg ref loaded status:', ffmpegRef.current.loaded);
     
     if (!file) {
       console.log('[HOOK DEBUG] No file provided, returning');
@@ -549,10 +550,30 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
     setMetadata(null);
     setSelectedFile(null);
 
-    if (!isLoaded) {
-      console.log('[HOOK DEBUG] FFmpeg not loaded, showing waiting message');
+    // Check both isLoaded state and actual FFmpeg status
+    const actuallyLoaded = isLoaded && ffmpegRef.current.loaded;
+    console.log('[HOOK DEBUG] Actually loaded?', actuallyLoaded);
+
+    if (!actuallyLoaded) {
+      console.log('[HOOK DEBUG] FFmpeg not ready, waiting...');
       showProgress('Waiting for FFmpeg to load...');
-      return;
+      
+      // Wait for FFmpeg to be ready with timeout
+      let attempts = 0;
+      const maxAttempts = 50; // 5 seconds max wait
+      
+      while (!ffmpegRef.current.loaded && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+        console.log('[HOOK DEBUG] Waiting for FFmpeg, attempt:', attempts);
+      }
+      
+      if (!ffmpegRef.current.loaded) {
+        showError('FFmpeg failed to load. Please refresh the page and try again.');
+        return;
+      }
+      
+      console.log('[HOOK DEBUG] FFmpeg is now ready, proceeding...');
     }
 
     console.log('[HOOK DEBUG] FFmpeg is loaded, calling extractMetadata');
