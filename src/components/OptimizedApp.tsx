@@ -45,6 +45,17 @@ const OptimizedApp: React.FC = () => {
     extractAllSubtitles 
   } = useOptimizedVideoMetadata();
 
+  // Debug logging
+  console.log('[APP DEBUG] Current state:', {
+    isLoaded,
+    selectedFile: selectedFile?.name,
+    currentMethod,
+    hasMetadata: !!metadata,
+    hasError: !!error.isVisible,
+    progressVisible: progress.isVisible,
+    progressText: progress.text
+  });
+
   const [fileList, setFileList] = useState<FileProcessingItem[]>([]);
   const [processingQueue, setProcessingQueue] = useState<File[]>([]);
   const [currentlyProcessing, setCurrentlyProcessing] = useState<File | null>(null);
@@ -59,6 +70,9 @@ const OptimizedApp: React.FC = () => {
 
   // Single file selection handler
   const onFileSelect = useCallback((file: File) => {
+    console.log('[APP DEBUG] File selected:', file.name, 'Size:', file.size);
+    console.log('[APP DEBUG] isLoaded before processing:', isLoaded);
+    
     // Clear batch state for single file processing
     setFileList([]);
     setProcessingQueue([]);
@@ -66,8 +80,9 @@ const OptimizedApp: React.FC = () => {
     setBatchProgress(prev => ({ ...prev, isVisible: false }));
     
     // Process single file immediately
+    console.log('[APP DEBUG] Calling handleFileSelect...');
     handleFileSelect(file);
-  }, [handleFileSelect]);
+  }, [handleFileSelect, isLoaded]);
 
   // Multiple files selection handler
   const onMultipleFilesSelect = useCallback((files: File[]) => {

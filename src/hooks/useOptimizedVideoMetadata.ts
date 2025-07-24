@@ -535,26 +535,39 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
 
   // Handle file selection
   const handleFileSelect = useCallback(async (file: File) => {
-    if (!file) return;
+    console.log('[HOOK DEBUG] handleFileSelect called with file:', file.name);
+    console.log('[HOOK DEBUG] Current isLoaded state:', isLoaded);
+    
+    if (!file) {
+      console.log('[HOOK DEBUG] No file provided, returning');
+      return;
+    }
 
     hideError();
     setMetadata(null);
     setSelectedFile(null);
 
     if (!isLoaded) {
+      console.log('[HOOK DEBUG] FFmpeg not loaded, showing waiting message');
       showProgress('Waiting for FFmpeg to load...');
       return;
     }
 
+    console.log('[HOOK DEBUG] FFmpeg is loaded, calling extractMetadata');
     await extractMetadata(file);
   }, [extractMetadata, hideError, isLoaded, showProgress]);
 
   // Initialize FFmpeg
   useEffect(() => {
     const initializeFFmpeg = async () => {
+      console.log('[FFMPEG DEBUG] Starting FFmpeg initialization...');
       const ffmpeg = ffmpegRef.current;
       
+      console.log('[FFMPEG DEBUG] FFmpeg ref:', ffmpeg);
+      console.log('[FFMPEG DEBUG] FFmpeg loaded status:', ffmpeg.loaded);
+      
       if (ffmpeg.loaded) {
+        console.log('[FFMPEG DEBUG] FFmpeg already loaded, setting isLoaded to true');
         setIsLoaded(true);
         return;
       }
@@ -562,15 +575,34 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       try {
         // Use the same pattern as the original working hook
         const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+        console.log('[FFMPEG DEBUG] Using baseURL:', baseURL);
         
+        const coreJSUrl = `${baseURL}/ffmpeg-core.js`;
+        const wasmUrl = `${baseURL}/ffmpeg-core.wasm`;
+        console.log('[FFMPEG DEBUG] Fetching URLs:', { coreJSUrl, wasmUrl });
+        
+        console.log('[FFMPEG DEBUG] Creating blob URLs...');
+        const coreURL = await toBlobURL(coreJSUrl, 'text/javascript');
+        const wasmURL = await toBlobURL(wasmUrl, 'application/wasm');
+        console.log('[FFMPEG DEBUG] Blob URLs created:', { coreURL, wasmURL });
+        
+        console.log('[FFMPEG DEBUG] Calling ffmpeg.load()...');
         await ffmpeg.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+          coreURL,
+          wasmURL,
         });
         
+        console.log('[FFMPEG DEBUG] FFmpeg.load() completed successfully');
+        console.log('[FFMPEG DEBUG] FFmpeg loaded status after load:', ffmpeg.loaded);
         setIsLoaded(true);
+        console.log('[FFMPEG DEBUG] setIsLoaded(true) called');
       } catch (err) {
-        console.error('Failed to load FFmpeg:', err);
+        console.error('[FFMPEG DEBUG] Failed to load FFmpeg:', err);
+        console.error('[FFMPEG DEBUG] Error details:', {
+          name: err instanceof Error ? err.name : 'Unknown',
+          message: err instanceof Error ? err.message : 'Unknown error',
+          stack: err instanceof Error ? err.stack : 'No stack trace'
+        });
         
         let errorMessage = 'Failed to load FFmpeg';
         
@@ -587,10 +619,12 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
           }
         }
         
+        console.log('[FFMPEG DEBUG] Showing error:', errorMessage);
         showError(errorMessage);
       }
     };
 
+    console.log('[FFMPEG DEBUG] useEffect triggered, calling initializeFFmpeg');
     initializeFFmpeg();
   }, [showError]);
 
