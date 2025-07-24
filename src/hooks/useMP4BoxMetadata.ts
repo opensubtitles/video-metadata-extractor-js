@@ -644,7 +644,6 @@ export const useMP4BoxMetadata = () => {
     showProgress,
     isLoaded: true, // MP4Box doesn't need loading like FFmpeg
     extractSubtitle,
-    extractSubtitleFull: extractSubtitle, // MP4Box uses same method for both (placeholder)
     extractStream,
     extractAllSubtitles: undefined // MP4Box doesn't support batch extraction for MKV files
   };

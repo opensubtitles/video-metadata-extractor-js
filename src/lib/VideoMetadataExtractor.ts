@@ -6,8 +6,21 @@
 
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL, fetchFile } from '@ffmpeg/util';
-import { VideoMetadata, ProgressState, ErrorState } from '../types';
 import JSZip from 'jszip';
+
+import { 
+  VideoMetadata, 
+  ProgressState, 
+  ErrorState, 
+  FFmpegError, 
+  FileProcessingError,
+  SubtitleExtractionError,
+  Result,
+  SubtitleStream,
+  VideoStream,
+  AudioStream,
+  MediaStream
+} from '../types';
 import { 
   generateSubtitleFilename, 
   safeDecodePreview, 
@@ -16,6 +29,19 @@ import {
   validateFileExtension,
   getFormatFromFileName 
 } from './utils';
+import { 
+  PROCESSING_CONSTANTS,
+  FFMPEG_CONSTANTS,
+  ERROR_MESSAGES,
+  SUPPORTED_FORMATS
+} from '../constants';
+import { 
+  withRetry,
+  safeAsync,
+  validateFile,
+  sleep
+} from '../utils/common';
+import { createFileProcessor } from '../utils/fileProcessor';
 
 export interface VideoMetadataExtractorOptions {
   /** Custom FFmpeg core URL */
@@ -85,13 +111,13 @@ export class VideoMetadataExtractor {
 
   constructor(options: VideoMetadataExtractorOptions = {}) {
     this.options = {
-      ffmpegCoreURL: options.ffmpegCoreURL || '',
-      ffmpegWasmURL: options.ffmpegWasmURL || '',
+      ffmpegCoreURL: options.ffmpegCoreURL || FFMPEG_CONSTANTS.CORE_URLS.CORE_JS,
+      ffmpegWasmURL: options.ffmpegWasmURL || FFMPEG_CONSTANTS.CORE_URLS.WASM,
       onProgress: options.onProgress || (() => {}),
       onError: options.onError || (() => {}),
       debug: options.debug ?? false,
-      timeout: options.timeout ?? 60000,
-      chunkSize: options.chunkSize ?? 500 * 1024 * 1024
+      timeout: options.timeout ?? PROCESSING_CONSTANTS.TIMEOUTS.FFMPEG_EXECUTION,
+      chunkSize: options.chunkSize ?? PROCESSING_CONSTANTS.CHUNK_SIZES.COMPLETE_FILE
     };
     
     this.ffmpeg = new FFmpeg();
@@ -123,9 +149,8 @@ export class VideoMetadataExtractor {
         console.log('[VideoMetadataExtractor] Initializing FFmpeg...');
       }
 
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-      const coreURL = this.options.ffmpegCoreURL || `${baseURL}/ffmpeg-core.js`;
-      const wasmURL = this.options.ffmpegWasmURL || `${baseURL}/ffmpeg-core.wasm`;
+      const coreURL = this.options.ffmpegCoreURL;
+      const wasmURL = this.options.ffmpegWasmURL;
 
       await this.ffmpeg.load({
         coreURL: await toBlobURL(coreURL, 'text/javascript'),
@@ -155,24 +180,15 @@ export class VideoMetadataExtractor {
       await this.initialize();
     }
 
-    // Validate file
-    const { isValid, extension } = validateFileExtension(file.name);
-    if (!isValid) {
-      const error = `Unsupported file format: ${extension}. Supported formats include: mp4, avi, mov, mkv, webm, flv, and many others.`;
+    // Validate file using centralized validation
+    const validation = validateFile(file);
+    if (!validation.isValid) {
+      const error = validation.errors.join('; ');
       this.options.onError({
         isVisible: true,
         message: error
       });
-      throw new Error(error);
-    }
-
-    if (file.size === 0) {
-      const error = `File "${file.name}" appears to be empty`;
-      this.options.onError({
-        isVisible: true,
-        message: error
-      });
-      throw new Error(error);
+      throw new FileProcessingError(error, file.name, file.size);
     }
 
     try {
@@ -199,9 +215,9 @@ export class VideoMetadataExtractor {
       });
 
       // Write file to FFmpeg virtual filesystem with timeout
-      const writePromise = this.ffmpeg.writeFile('input.video', await fetchFile(fileData));
+      const writePromise = this.ffmpeg.writeFile(FFMPEG_CONSTANTS.TEMP_FILES.INPUT, await fetchFile(fileData));
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('File write timeout')), this.options.timeout);
+        setTimeout(() => reject(new FFmpegError(ERROR_MESSAGES.FFMPEG.TIMEOUT, 'file_write')), PROCESSING_CONSTANTS.TIMEOUTS.FILE_WRITE);
       });
 
       await Promise.race([writePromise, timeoutPromise]);
@@ -222,9 +238,9 @@ export class VideoMetadataExtractor {
 
       try {
         // Use -i command to get metadata info
-        const execPromise = this.ffmpeg.exec(['-i', 'input.video']);
+        const execPromise = this.ffmpeg.exec(['-i', FFMPEG_CONSTANTS.TEMP_FILES.INPUT]);
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('FFmpeg execution timeout')), this.options.timeout);
+          setTimeout(() => reject(new FFmpegError(ERROR_MESSAGES.FFMPEG.TIMEOUT, 'metadata_extraction')), this.options.timeout);
         });
 
         await Promise.race([execPromise, timeoutPromise]);
@@ -520,72 +536,57 @@ export class VideoMetadataExtractor {
   /**
    * Get supported file formats
    */
-  getSupportedFormats(): string[] {
-    return [
-      'mp4', 'm4v', 'mov', '3gp', '3g2', 'mj2',
-      'avi', 'mkv', 'webm', 'flv', 'asf', 'wmv',
-      'mpg', 'mpeg', 'ts', 'm2ts', 'ogv', 'ogg',
-      'gif', 'swf', 'rm', 'rmvb', 'dv', 'mxf'
-    ];
+  getSupportedFormats(): readonly string[] {
+    return SUPPORTED_FORMATS.ALL;
   }
 
   /**
-   * Clean up FFmpeg temporary files
+   * Clean up FFmpeg temporary files using centralized constants and retry logic
    */
   private async cleanupFFmpegFiles(): Promise<void> {
     if (!this.ffmpeg) return;
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await sleep(PROCESSING_CONSTANTS.TIMEOUTS.CLEANUP);
 
-      const tempFiles = ['input.video', 'output.video', 'subtitle.srt', 'subtitle.ass', 'subtitle.vtt'];
+      // Clean up known temporary files with retry logic
+      const tempFiles = Object.values(FFMPEG_CONSTANTS.TEMP_FILES);
       for (const fileName of tempFiles) {
-        let retries = 3;
-        while (retries > 0) {
-          try {
-            await this.ffmpeg.deleteFile(fileName);
-            break;
-          } catch (err) {
-            retries--;
-            if (retries > 0) {
-              await new Promise(resolve => setTimeout(resolve, 100));
-            }
-          }
-        }
+        await withRetry(
+          () => this.ffmpeg.deleteFile(fileName),
+          PROCESSING_CONSTANTS.RETRY.MAX_ATTEMPTS,
+          PROCESSING_CONSTANTS.RETRY.BASE_DELAY
+        ).catch(() => {
+          // Ignore cleanup errors for individual files
+        });
       }
 
       // Clean up any remaining files
       try {
         const files = await this.ffmpeg.listDir('/');
-        const systemDirs = new Set(['.', '..', 'tmp', 'home', 'dev', 'proc', 'usr', 'bin', 'etc', 'var', 'lib']);
 
         for (const fileInfo of files) {
           const fileName = typeof fileInfo === 'string' ? fileInfo : fileInfo.name;
           const isDir = typeof fileInfo === 'object' && fileInfo.isDir;
 
-          if (!systemDirs.has(fileName) && !isDir) {
-            let retries = 3;
-            while (retries > 0) {
-              try {
-                await this.ffmpeg.deleteFile(fileName);
-                break;
-              } catch (err) {
-                retries--;
-                if (retries > 0) {
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                }
-              }
-            }
+          if (!FFMPEG_CONSTANTS.SYSTEM_DIRS.has(fileName) && !isDir) {
+            await withRetry(
+              () => this.ffmpeg.deleteFile(fileName),
+              PROCESSING_CONSTANTS.RETRY.MAX_ATTEMPTS,
+              PROCESSING_CONSTANTS.RETRY.BASE_DELAY
+            ).catch(() => {
+              // Ignore cleanup errors for individual files
+            });
           }
         }
       } catch (listError) {
         // Continue on error
       }
 
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await sleep(300); // Final delay to ensure cleanup is complete
 
     } catch (cleanupError) {
-      // Continue on error
+      // Continue on error - cleanup failures shouldn't stop the main operation
     }
   }
 
@@ -638,16 +639,7 @@ export class VideoMetadataExtractor {
     const sampleRate = audioStreamMatch ? audioStreamMatch[2] : '48000';
 
     // Parse subtitle streams
-    const subtitleStreams: Array<{
-      codec_type: string;
-      codec_name: string;
-      language?: string;
-      title?: string;
-      forced?: boolean;
-      default?: boolean;
-      index?: number;
-      size?: string;
-    }> = [];
+    const subtitleStreams: SubtitleStream[] = [];
 
     const subtitleMatches = logOutput.match(/Stream #\d+:\d+(?:\([^)]*\))?: Subtitle: ([^(\n]+)(?:\([^)]*\))?[^\n]*(?:\n[^\n]*)*?(?:BPS\s*:\s*(\d+))?/g);
 
@@ -666,17 +658,37 @@ export class VideoMetadataExtractor {
         const isForced = match.includes('(forced)');
 
         subtitleStreams.push({
-          codec_type: 'subtitle',
+          codec_type: 'subtitle' as const,
           codec_name: codecName,
           language: language,
           default: isDefault,
           forced: isForced,
-          index: streamIndex
+          index: streamIndex || 0
         });
       });
     }
 
-    // Create metadata structure
+    // Create metadata structure with proper discriminated union types
+    const videoStream: VideoStream = {
+      codec_type: 'video' as const,
+      codec_name: videoCodec,
+      width: resolution !== 'unknown' ? parseInt(resolution.split('x')[0]) : 1280,
+      height: resolution !== 'unknown' ? parseInt(resolution.split('x')[1]) : 720,
+      r_frame_rate: `${fps}/1`,
+      pix_fmt: 'yuv420p',
+      bit_rate: '1500000',
+      index: 0
+    };
+
+    const audioStream: AudioStream = {
+      codec_type: 'audio' as const,
+      codec_name: audioCodec,
+      channels: 2,
+      sample_rate: sampleRate,
+      bit_rate: '128000',
+      index: 1
+    };
+
     const metadata: VideoMetadata = {
       format: {
         filename: file.name,
@@ -689,24 +701,8 @@ export class VideoMetadataExtractor {
         movieframes: movieframes
       },
       streams: [
-        {
-          codec_type: 'video',
-          codec_name: videoCodec,
-          width: resolution !== 'unknown' ? parseInt(resolution.split('x')[0]) : 1280,
-          height: resolution !== 'unknown' ? parseInt(resolution.split('x')[1]) : 720,
-          r_frame_rate: `${fps}/1`,
-          pix_fmt: 'yuv420p',
-          bit_rate: '1500000',
-          index: 0
-        },
-        {
-          codec_type: 'audio',
-          codec_name: audioCodec,
-          channels: 2,
-          sample_rate: sampleRate,
-          bit_rate: '128000',
-          index: 1
-        },
+        videoStream,
+        audioStream,
         ...subtitleStreams
       ]
     };

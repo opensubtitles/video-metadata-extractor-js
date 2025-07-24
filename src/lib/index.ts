@@ -40,14 +40,69 @@ export {
   downloadLargeFile,
   createCompleteFileDataInChunks,
   validateFileExtension,
-  getFormatFromFileName
+  getFormatFromFileName,
+  isSupportedFormat,
+  getSupportedVideoFormats,
+  getSupportedAudioFormats,
+  getAllSupportedFormats
 } from './utils';
+
+// Common utilities
+export {
+  withRetry,
+  safeAsync,
+  formatFileSize,
+  formatDuration,
+  validateFile,
+  sleep
+} from '../utils/common';
+
+// File processing utilities
+export {
+  FileProcessor,
+  createFileProcessor,
+  isLargeFile,
+  isVeryLargeFile,
+  getRecommendedProcessingStrategy
+} from '../utils/fileProcessor';
+
+// Constants
+export {
+  PROCESSING_CONSTANTS,
+  UI_CONSTANTS,
+  SUPPORTED_FORMATS,
+  LANGUAGE_CODES,
+  FFMPEG_CONSTANTS,
+  ERROR_MESSAGES
+} from '../constants';
 
 // Types from the main application
 export type {
   VideoMetadata,
   ProgressState,
-  ErrorState
+  ErrorState,
+  MediaStream,
+  VideoStream,
+  AudioStream,
+  SubtitleStream,
+  FormatInfo,
+  StreamType,
+  FFmpegError,
+  FileProcessingError,
+  SubtitleExtractionError,
+  Result,
+  ProcessingOptions,
+  SubtitleExtractionOptions,
+  BatchExtractionOptions,
+  FileValidationResult,
+  ProcessingStats
+} from '../types';
+
+// Type guards
+export {
+  isVideoStream,
+  isAudioStream,
+  isSubtitleStream
 } from '../types';
 
 // React hook (for React applications)

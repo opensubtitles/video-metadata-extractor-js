@@ -48,7 +48,6 @@ export const useSmartMetadata = () => {
     currentMethod: selectedFile ? (shouldUseMp4Box(selectedFile) ? 'MP4Box' : 'FFmpeg') : 'FFmpeg',
     // Use the appropriate extraction method based on the processing method
     extractSubtitle: currentHook.extractSubtitle,
-    extractSubtitleFull: currentHook.extractSubtitleFull,
     extractStream: currentHook.extractStream,
     extractAllSubtitles: currentHook.extractAllSubtitles
   };

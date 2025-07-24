@@ -24,7 +24,7 @@ interface BatchProgress {
 }
 
 const App: React.FC = () => {
-  const { metadata, progress, error, handleFileSelect, hideError, hideProgress, isLoaded, selectedFile, currentMethod, extractSubtitle, extractSubtitleFull, extractStream, extractAllSubtitles } = useSmartMetadata();
+  const { metadata, progress, error, handleFileSelect, hideError, hideProgress, isLoaded, selectedFile, currentMethod, extractSubtitle, extractStream, extractAllSubtitles } = useSmartMetadata();
   const [fileMetadataList, setFileMetadataList] = useState<FileMetadata[]>([]);
   const [processingQueue, setProcessingQueue] = useState<File[]>([]);
   const [currentlyProcessing, setCurrentlyProcessing] = useState<File | null>(null);
@@ -132,7 +132,7 @@ const App: React.FC = () => {
         // Add a timeout to prevent processing from getting stuck
         setTimeout(() => {
           if (currentlyProcessing === nextFile && isProcessingLocked) {
-            console.log(`[BATCH DEBUG] Processing timeout for: ${nextFile.name}`);
+            console.log(`[BATCH DEBUG] Processing timeout for: ${(nextFile as File).name}`);
             setFileMetadataList(prev => prev.map(item => 
               item.file === nextFile 
                 ? { ...item, error: 'Processing timeout - file took too long to process', isProcessing: false }
@@ -359,7 +359,6 @@ const App: React.FC = () => {
                     metadata={fileItem.metadata} 
                     selectedFile={fileItem.file} 
                     extractSubtitle={extractSubtitle}
-                    extractSubtitleFull={extractSubtitleFull} 
                     extractStream={extractStream}
                     extractAllSubtitles={extractAllSubtitles} 
                   />
@@ -377,7 +376,7 @@ const App: React.FC = () => {
         
         {/* Single File Result */}
         {fileMetadataList.length === 0 && metadata && (
-          <MetadataDisplay metadata={metadata} selectedFile={selectedFile} extractSubtitle={extractSubtitle} extractSubtitleFull={extractSubtitleFull} extractStream={extractStream} extractAllSubtitles={extractAllSubtitles} />
+          <MetadataDisplay metadata={metadata} selectedFile={selectedFile} extractSubtitle={extractSubtitle} extractStream={extractStream} extractAllSubtitles={extractAllSubtitles} />
         )}
       </div>
     </div>

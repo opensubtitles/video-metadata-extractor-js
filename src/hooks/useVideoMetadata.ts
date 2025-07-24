@@ -698,7 +698,34 @@ export const useVideoMetadata = () => {
       
       // Debug data logging removed for cleaner console output
       
-      // Create comprehensive metadata structure with actual extracted data
+      // Create comprehensive metadata structure with actual extracted data using discriminated unions
+      const videoStream = {
+        codec_type: 'video' as const,
+        codec_name: videoCodec,
+        width: resolution !== 'unknown' ? parseInt(resolution.split('x')[0]) : 1280,
+        height: resolution !== 'unknown' ? parseInt(resolution.split('x')[1]) : 720,
+        r_frame_rate: `${fps}/1`,
+        pix_fmt: 'yuv420p',
+        bit_rate: '1500000',
+        index: 0 // First video stream
+      };
+
+      const audioStream = {
+        codec_type: 'audio' as const,
+        codec_name: audioCodec,
+        channels: 2,
+        sample_rate: sampleRate,
+        bit_rate: `${audioBitrate}000`,
+        index: 1 // First audio stream
+      };
+
+      // Convert subtitle streams to proper discriminated union type
+      const typedSubtitleStreams = subtitleStreams.map(stream => ({
+        ...stream,
+        codec_type: 'subtitle' as const,
+        index: stream.index || 0
+      }));
+
       const extractedMetadata = {
         format: {
           filename: file.name,
@@ -711,25 +738,9 @@ export const useVideoMetadata = () => {
           movieframes: movieframes
         },
         streams: [
-          {
-            codec_type: 'video',
-            codec_name: videoCodec,
-            width: resolution !== 'unknown' ? parseInt(resolution.split('x')[0]) : 1280,
-            height: resolution !== 'unknown' ? parseInt(resolution.split('x')[1]) : 720,
-            r_frame_rate: `${fps}/1`,
-            pix_fmt: 'yuv420p',
-            bit_rate: '1500000',
-            index: 0 // First video stream
-          },
-          {
-            codec_type: 'audio',
-            codec_name: audioCodec,
-            channels: 2,
-            sample_rate: sampleRate,
-            bit_rate: `${audioBitrate}000`,
-            index: 1 // First audio stream
-          },
-          ...subtitleStreams
+          videoStream,
+          audioStream,
+          ...typedSubtitleStreams
         ]
       };
       
@@ -1225,451 +1236,6 @@ export const useVideoMetadata = () => {
     }
   }, [isLoaded, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
 
-  const extractSubtitleFull = useCallback(async (file: File, streamIndex: number, language?: string, codecName?: string, isForced?: boolean) => {
-    if (!isLoaded) return;
-
-    try {
-      console.log(`[FULL EXTRACTION DEBUG] Starting full extraction for: ${file.name}, streamIndex: ${streamIndex}, language: ${language}, codec: ${codecName}, forced: ${isForced}`);
-      showProgress(`Preparing full subtitle extraction for track ${streamIndex}...`, 5);
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Clean up before extraction
-      console.log(`[FULL EXTRACTION DEBUG] Starting cleanup...`);
-      await cleanupFFmpegFiles();
-      console.log(`[FULL EXTRACTION DEBUG] Cleanup completed`);
-      
-      // Add delay after cleanup
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Classic full file approach - load entire file into memory
-      const fileSize = file.size;
-      const fileSizeMB = Math.round(fileSize / 1024 / 1024);
-      
-      console.log(`[FULL EXTRACTION DEBUG] File size: ${fileSize} bytes (${fileSizeMB}MB)`);
-      
-      // Warn user about memory usage for large files
-      if (fileSize > 1024 * 1024 * 1024) { // > 1GB
-        showProgress(`⚠️  Loading large file (${fileSizeMB}MB) - this may take time and use significant memory...`, 10);
-      } else {
-        showProgress(`Loading complete file for full subtitle extraction (${fileSizeMB}MB)...`, 10);
-      }
-      
-      // Use the entire file - classic approach for maximum compatibility
-      const fileData = file;
-      console.log(`[FULL EXTRACTION DEBUG] Using entire file, size: ${fileData.size} bytes`);
-      
-      // Write file to FFmpeg virtual filesystem
-      showProgress(`Loading data into FFmpeg for full extraction...`, 30);
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      console.log(`[FULL EXTRACTION DEBUG] Starting file write to FFmpeg virtual filesystem...`);
-      
-      // Write entire file with timeout for large files
-      const timeoutDuration = Math.max(60000, fileSize / 1024 / 1024 * 1000); // 1 second per MB, minimum 60 seconds
-      console.log(`[FULL EXTRACTION DEBUG] Write timeout set to: ${Math.round(timeoutDuration/1000)} seconds`);
-      
-      try {
-        const writePromise = ffmpegRef.current.writeFile('input.video', await fetchFile(fileData));
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error(`File write timeout after ${Math.round(timeoutDuration/1000)} seconds`)), timeoutDuration);
-        });
-        
-        await Promise.race([writePromise, timeoutPromise]);
-        console.log(`[FULL EXTRACTION DEBUG] File write completed successfully`);
-      } catch (writeError) {
-        console.error(`[FULL EXTRACTION DEBUG] File write failed:`, writeError);
-        throw writeError;
-      }
-      
-      // Generate proper filename based on movie name
-      console.log(`[FULL EXTRACTION DEBUG] Generating filename for: ${file.name}, language: ${language}, forced: ${isForced}, codec: ${codecName}`);
-      const { filename: outputFilename, extension: outputExt } = generateSubtitleFilename(
-        file.name, 
-        language, 
-        isForced, 
-        codecName
-      );
-      
-      // Add "full" suffix to distinguish from regular extraction
-      const fullOutputFilename = outputFilename.replace(/(\.[^.]+)$/, '.full$1');
-      console.log(`[FULL EXTRACTION DEBUG] Generated filename: ${fullOutputFilename}`);
-      
-      // Determine output format based on extension
-      let outputFormat = outputExt;
-      if (outputExt === 'vtt') {
-        outputFormat = 'webvtt';
-      }
-      console.log(`[FULL EXTRACTION DEBUG] Output format: ${outputFormat}, extension: ${outputExt}`);
-      
-      try {
-        // Full extraction with comprehensive parameters for maximum compatibility
-        showProgress(`Performing full subtitle extraction (${outputFormat} format)...`, 60);
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        console.log(`[FULL EXTRACTION DEBUG] Starting FFmpeg execution with parameters:`);
-        const ffmpegArgs = [
-          '-i', 'input.video',
-          '-map', `0:${streamIndex}`,
-          '-c:s', outputFormat,
-          '-avoid_negative_ts', 'make_zero',    // Handle timing issues
-          '-fix_sub_duration',                  // Fix subtitle duration issues
-          '-copyts',                           // Copy timestamps exactly
-          '-start_at_zero',                    // Start timestamps at zero
-          fullOutputFilename
-        ];
-        console.log(`[FULL EXTRACTION DEBUG] FFmpeg args:`, ffmpegArgs);
-        
-        // Use comprehensive extraction parameters for complete subtitles
-        await ffmpegRef.current.exec(ffmpegArgs);
-        console.log(`[FULL EXTRACTION DEBUG] FFmpeg execution completed successfully`);
-        
-        // Check what files exist in the virtual filesystem
-        try {
-          const files = await ffmpegRef.current.listDir('/');
-          console.log(`[FULL EXTRACTION DEBUG] Files in virtual filesystem:`, files);
-          
-          // Log detailed file information
-          const fileDetails = files.map((file: any) => {
-            if (typeof file === 'string') {
-              return { name: file, type: 'string' };
-            } else {
-              return { 
-                name: file.name || 'unnamed', 
-                isDir: file.isDir || false,
-                size: file.size || 'unknown',
-                type: 'object'
-              };
-            }
-          });
-          console.log(`[FULL EXTRACTION DEBUG] Detailed file info:`, fileDetails);
-          
-          // Look for any subtitle files that were created
-          const subtitleFiles = files.filter((file: any) => {
-            const fileName = typeof file === 'string' ? file : file.name;
-            return fileName && (fileName.includes('.srt') || fileName.includes('.ass') || fileName.includes('.vtt') || fileName.includes('.sub'));
-          });
-          console.log(`[FULL EXTRACTION DEBUG] Found subtitle files:`, subtitleFiles);
-          
-          // Also look for any file with our expected base name (without extension)
-          const baseFileName = fullOutputFilename.replace(/\.[^/.]+$/, ''); // Remove extension
-          const relatedFiles = files.filter((file: any) => {
-            const fileName = typeof file === 'string' ? file : file.name;
-            return fileName && fileName.includes(baseFileName.split('.')[0]); // Use first part of filename
-          });
-          console.log(`[FULL EXTRACTION DEBUG] Files related to "${baseFileName}":`, relatedFiles);
-          
-          // If our expected filename isn't found, try to use any subtitle file that was created
-          if (subtitleFiles.length > 0) {
-            const actualSubtitleFile = subtitleFiles.find((file: any) => {
-              const fileName = typeof file === 'string' ? file : file.name;
-              return fileName && fileName.includes('full');
-            }) || subtitleFiles[0];
-            
-            const actualFileName = typeof actualSubtitleFile === 'string' ? actualSubtitleFile : actualSubtitleFile.name;
-            console.log(`[FULL EXTRACTION DEBUG] Will try to read file: ${actualFileName}`);
-            
-            // Update the filename to what was actually created
-            if (actualFileName !== fullOutputFilename) {
-              console.log(`[FULL EXTRACTION DEBUG] Filename mismatch - expected: ${fullOutputFilename}, found: ${actualFileName}`);
-              // Use the actual filename for reading
-              const correctedFilename = actualFileName;
-              
-              try {
-                const subtitleData = await ffmpegRef.current.readFile(correctedFilename);
-                console.log(`[FULL EXTRACTION DEBUG] Successfully read corrected file, size: ${subtitleData.length} bytes`);
-                
-                // Log first few bytes to see if there's actual content
-                if (subtitleData.length > 0) {
-                  const preview = safeDecodePreview(subtitleData, 200);
-                  console.log(`[FULL EXTRACTION DEBUG] File content preview:`, preview);
-                }
-                
-                // Create download with original filename
-                const blob = new Blob([subtitleData], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = fullOutputFilename; // Use our expected filename for download
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                console.log(`[FULL EXTRACTION DEBUG] Corrected download initiated successfully`);
-                
-                // Clean up after extraction
-                await cleanupFFmpegFiles();
-                
-                // Show completion message
-                showProgress(`Full subtitle extraction completed! Download should start automatically.`, 100);
-                return; // Exit successfully
-              } catch (correctedReadError) {
-                console.error(`[FULL EXTRACTION DEBUG] Failed to read corrected file:`, correctedReadError);
-                // Continue to original read attempt
-              }
-            }
-          }
-          
-          // If no subtitle files were created, the stream might be empty or the parameters wrong
-          if (subtitleFiles.length === 0) {
-            console.log(`[FULL EXTRACTION DEBUG] No subtitle files created - trying simplified extraction...`);
-            
-            // Try a much simpler FFmpeg command without the complex parameters
-            const simpleOutputFilename = `output_${streamIndex}.srt`;
-            console.log(`[FULL EXTRACTION DEBUG] Trying simple extraction to: ${simpleOutputFilename}`);
-            
-            try {
-              await ffmpegRef.current.exec([
-                '-i', 'input.video',
-                '-map', `0:${streamIndex}`,
-                '-c:s', 'srt',
-                simpleOutputFilename
-              ]);
-              console.log(`[FULL EXTRACTION DEBUG] Simple extraction completed`);
-              
-              // Check if this created a file
-              const newFiles = await ffmpegRef.current.listDir('/');
-              const newSubtitleFiles = newFiles.filter((file: any) => {
-                const fileName = typeof file === 'string' ? file : file.name;
-                return fileName && fileName.includes('.srt');
-              });
-              console.log(`[FULL EXTRACTION DEBUG] Files after simple extraction:`, newSubtitleFiles);
-              
-              if (newSubtitleFiles.length > 0) {
-                const simpleFile = newSubtitleFiles.find((file: any) => {
-                  const fileName = typeof file === 'string' ? file : file.name;
-                  return fileName === simpleOutputFilename;
-                }) || newSubtitleFiles[0];
-                
-                const simpleFileName = typeof simpleFile === 'string' ? simpleFile : simpleFile.name;
-                console.log(`[FULL EXTRACTION DEBUG] Reading simple extraction file: ${simpleFileName}`);
-                
-                const subtitleData = await ffmpegRef.current.readFile(simpleFileName);
-                console.log(`[FULL EXTRACTION DEBUG] Simple file read successfully, size: ${subtitleData.length} bytes`);
-                
-                if (subtitleData.length > 0) {
-                  const preview = safeDecodePreview(subtitleData, 200);
-                  console.log(`[FULL EXTRACTION DEBUG] Simple file content preview:`, preview);
-                  
-                  // Create download with our expected filename
-                  const blob = new Blob([subtitleData], { type: 'text/plain' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = fullOutputFilename;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                  console.log(`[FULL EXTRACTION DEBUG] Simple extraction download initiated successfully`);
-                  
-                  // Clean up after extraction
-                  await cleanupFFmpegFiles();
-                  
-                  // Show completion message
-                  showProgress(`Full subtitle extraction completed! Download should start automatically.`, 100);
-                  return; // Exit successfully
-                }
-              }
-              
-            } catch (simpleError) {
-              console.error(`[FULL EXTRACTION DEBUG] Simple extraction also failed:`, simpleError);
-            }
-          }
-          
-        } catch (listError) {
-          console.warn(`[FULL EXTRACTION DEBUG] Could not list files:`, listError);
-        }
-        
-      } catch (extractError) {
-        console.error(`[FULL EXTRACTION DEBUG] Primary FFmpeg execution failed:`, extractError);
-        
-        // If native format fails, try SRT with more options
-        const srtFilename = fullOutputFilename.replace(/\.[^/.]+$/, '.full.srt');
-        console.log(`[FULL EXTRACTION DEBUG] Trying SRT fallback with filename: ${srtFilename}`);
-        
-        showProgress(`Full extraction with SRT conversion and comprehensive timing fixes...`, 60);
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        const srtArgs = [
-          '-i', 'input.video',
-          '-map', `0:${streamIndex}`,
-          '-c:s', 'srt',
-          '-avoid_negative_ts', 'make_zero',
-          '-fix_sub_duration',
-          '-copyts',
-          '-start_at_zero',
-          '-sub_charenc', 'UTF-8',            // Force UTF-8 encoding
-          srtFilename
-        ];
-        console.log(`[FULL EXTRACTION DEBUG] SRT fallback args:`, srtArgs);
-        
-        // Enhanced SRT fallback with maximum compatibility flags
-        await ffmpegRef.current.exec(srtArgs);
-        console.log(`[FULL EXTRACTION DEBUG] SRT fallback execution completed`);
-        
-        // Check what files exist after SRT fallback
-        try {
-          const files = await ffmpegRef.current.listDir('/');
-          console.log(`[FULL EXTRACTION DEBUG] Files after SRT fallback:`, files);
-          
-          // Look for any subtitle files that were created
-          const subtitleFiles = files.filter((file: any) => {
-            const fileName = typeof file === 'string' ? file : file.name;
-            return fileName && (fileName.includes('.srt') || fileName.includes('.ass') || fileName.includes('.vtt') || fileName.includes('.sub'));
-          });
-          console.log(`[FULL EXTRACTION DEBUG] Found subtitle files after SRT:`, subtitleFiles);
-          
-          if (subtitleFiles.length > 0) {
-            // Try to find the file we expect, or use any SRT file
-            const actualSubtitleFile = subtitleFiles.find((file: any) => {
-              const fileName = typeof file === 'string' ? file : file.name;
-              return fileName && fileName.includes('full');
-            }) || subtitleFiles.find((file: any) => {
-              const fileName = typeof file === 'string' ? file : file.name;
-              return fileName && fileName.includes('.srt');
-            }) || subtitleFiles[0];
-            
-            const actualFileName = typeof actualSubtitleFile === 'string' ? actualSubtitleFile : actualSubtitleFile.name;
-            console.log(`[FULL EXTRACTION DEBUG] Will try to read SRT file: ${actualFileName}`);
-            
-            try {
-              const subtitleData = await ffmpegRef.current.readFile(actualFileName);
-              console.log(`[FULL EXTRACTION DEBUG] SRT file read successfully, size: ${subtitleData.length} bytes`);
-              
-              // Log first few bytes to see if there's actual content
-              if (subtitleData.length > 0) {
-                const preview = safeDecodePreview(subtitleData, 200);
-                console.log(`[FULL EXTRACTION DEBUG] SRT file content preview:`, preview);
-              }
-              
-              // Create download
-              const blob = new Blob([subtitleData], { type: 'text/plain' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = srtFilename; // Use SRT filename
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              URL.revokeObjectURL(url);
-              console.log(`[FULL EXTRACTION DEBUG] SRT download initiated successfully`);
-              
-              // Clean up after extraction
-              await cleanupFFmpegFiles();
-              
-              hideProgress();
-              return; // Exit successfully
-            } catch (actualReadError) {
-              console.error(`[FULL EXTRACTION DEBUG] Failed to read actual SRT file:`, actualReadError);
-              // Continue to original logic
-            }
-          }
-        } catch (listError) {
-          console.warn(`[FULL EXTRACTION DEBUG] Could not list files after SRT:`, listError);
-        }
-        
-        // Update output filename for download
-        showProgress(`Preparing full subtitle download...`, 80);
-        console.log(`[FULL EXTRACTION DEBUG] Reading SRT file: ${srtFilename}`);
-        
-        try {
-          const subtitleData = await ffmpegRef.current.readFile(srtFilename);
-          console.log(`[FULL EXTRACTION DEBUG] SRT file read successfully, size: ${subtitleData.length} bytes`);
-          
-          // Create download
-          const blob = new Blob([subtitleData], { type: 'text/plain' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = srtFilename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          console.log(`[FULL EXTRACTION DEBUG] SRT download initiated successfully`);
-          
-          // Clean up after extraction
-          await cleanupFFmpegFiles();
-          
-          hideProgress();
-          return;
-        } catch (readError) {
-          console.error(`[FULL EXTRACTION DEBUG] Failed to read SRT file:`, readError);
-          throw readError;
-        }
-      }
-      
-      // Read the extracted subtitle file (primary format)
-      showProgress(`Preparing full subtitle download...`, 80);
-      console.log(`[FULL EXTRACTION DEBUG] Reading primary format file: ${fullOutputFilename}`);
-      
-      try {
-        const subtitleData = await ffmpegRef.current.readFile(fullOutputFilename);
-        console.log(`[FULL EXTRACTION DEBUG] Primary file read successfully, size: ${subtitleData.length} bytes`);
-        
-        // Log first few bytes to see if there's actual content
-        if (subtitleData.length > 0) {
-          const preview = safeDecodePreview(subtitleData, 200);
-          console.log(`[FULL EXTRACTION DEBUG] File content preview:`, preview);
-        }
-        
-        // Create download
-        const blob = new Blob([subtitleData], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fullOutputFilename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        console.log(`[FULL EXTRACTION DEBUG] Primary download initiated successfully`);
-        
-        // Clean up after extraction
-        await cleanupFFmpegFiles();
-        
-        // Show completion message
-        showProgress(`Full subtitle extraction completed! Download should start automatically.`, 100);
-      } catch (readError) {
-        console.error(`[FULL EXTRACTION DEBUG] Failed to read primary format file:`, readError);
-        throw readError;
-      }
-      
-    } catch (err) {
-      console.error(`[FULL EXTRACTION DEBUG] Full extraction failed with error:`, err);
-      
-      let errorMessage = 'Failed to extract complete subtitle';
-      if (err instanceof Error) {
-        console.error(`[FULL EXTRACTION DEBUG] Error details:`, {
-          message: err.message,
-          stack: err.stack,
-          name: err.name
-        });
-        
-        errorMessage = `Failed to extract complete subtitle: ${err.message}`;
-        
-        // Provide more specific error messages
-        if (err.message.includes('Invalid data found')) {
-          errorMessage = 'Subtitle track appears to be corrupted or in an unsupported format';
-        } else if (err.message.includes('Stream not found')) {
-          errorMessage = 'Subtitle stream not found. The file may not contain embedded subtitles.';
-        } else if (err.message.includes('Decoder not found')) {
-          errorMessage = 'Subtitle codec not supported. Try a different subtitle track.';
-        } else if (err.message.includes('timeout')) {
-          errorMessage = 'Full extraction timed out. Try using the Quick extraction method instead.';
-        }
-      }
-      
-      console.log(`[FULL EXTRACTION DEBUG] Showing error to user: ${errorMessage}`);
-      showError(errorMessage);
-      hideProgress();
-      
-      // Clean up after error
-      console.log(`[FULL EXTRACTION DEBUG] Starting cleanup after error...`);
-      await cleanupFFmpegFiles();
-      console.log(`[FULL EXTRACTION DEBUG] Cleanup after error completed`);
-    }
-  }, [isLoaded, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
 
   const extractStream = useCallback(async (file: File, streamIndex: number, streamType: string, codecName?: string) => {
     if (!isLoaded) return;
@@ -1905,7 +1471,7 @@ export const useVideoMetadata = () => {
       for (let i = 0; i < subtitleStreams.length; i++) {
         const stream = subtitleStreams[i];
         const streamIndex = stream.index !== undefined ? stream.index : i;
-        const progress = 20 + (i / subtitleStreams.length) * 70; // Progress from 20% to 90%
+        const progress = Math.round(20 + (i / subtitleStreams.length) * 70); // Progress from 20% to 90%
 
         console.log(`[EXTRACT ALL DEBUG] Processing subtitle ${i + 1}/${subtitleStreams.length}, stream index: ${streamIndex}`);
         showProgress(`Extracting subtitle ${i + 1}/${subtitleStreams.length} (${stream.language || 'unknown'})...`, progress);
@@ -1921,9 +1487,18 @@ export const useVideoMetadata = () => {
 
           let outputFilename = baseFilename;
           
-          // Handle duplicate filenames by adding track number
+          // Handle duplicate filenames by adding track number before language
           if (usedFilenames.has(outputFilename)) {
-            outputFilename = baseFilename.replace(/(\.[^.]+)$/, `.${streamIndex}$1`);
+            // Generate a new filename with track number: moviename.tracknum.lang.ext
+            const { filename: trackFilename } = generateSubtitleFilename(
+              file.name, 
+              stream.language, 
+              stream.forced,
+              stream.codec_name
+            );
+            // Insert track number before the language part
+            const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+            outputFilename = trackFilename.replace(nameWithoutExt, `${nameWithoutExt}.${streamIndex}`);
           }
           usedFilenames.add(outputFilename);
 
@@ -2033,7 +1608,6 @@ export const useVideoMetadata = () => {
     showProgress,
     isLoaded,
     extractSubtitle,
-    extractSubtitleFull,
     extractStream,
     extractAllSubtitles
   };
