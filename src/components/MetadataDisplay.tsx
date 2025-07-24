@@ -219,9 +219,9 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
                 <button
                   onClick={handleDownloadStream}
                   className="absolute top-2 right-2 bg-green-500 hover:bg-green-600 text-white text-xs px-2 py-1 rounded shadow-sm transition-colors"
-                  title={`Download ${stream.codec_type} stream`}
+                  title={`Extract ${stream.codec_type} stream`}
                 >
-                  Download
+                  Extract {stream.codec_type === 'video' ? 'Video' : 'Audio'}
                 </button>
               )}
             </div>
