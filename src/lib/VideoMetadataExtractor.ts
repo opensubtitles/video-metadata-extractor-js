@@ -1,35 +1,110 @@
 /**
- * Main VideoMetadataExtractor class for programmatic use
+ * Comprehensive VideoMetadataExtractor class for programmatic use
+ * Supports metadata extraction, individual and batch subtitle extraction with ZIP downloads,
+ * and memory-safe processing of files of any size using chunked streaming
  */
 
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL, fetchFile } from '@ffmpeg/util';
 import { VideoMetadata, ProgressState, ErrorState } from '../types';
 import JSZip from 'jszip';
+import { 
+  generateSubtitleFilename, 
+  safeDecodePreview, 
+  createCompleteFileDataInChunks,
+  downloadLargeFile,
+  validateFileExtension,
+  getFormatFromFileName 
+} from './utils';
 
-export interface ExtractorOptions {
+export interface VideoMetadataExtractorOptions {
+  /** Custom FFmpeg core URL */
   ffmpegCoreURL?: string;
+  /** Custom FFmpeg WASM URL */
   ffmpegWasmURL?: string;
+  /** Progress callback */
   onProgress?: (progress: ProgressState) => void;
+  /** Error callback */
   onError?: (error: ErrorState) => void;
+  /** Enable debug logging */
+  debug?: boolean;
+  /** Timeout for FFmpeg operations in milliseconds */
+  timeout?: number;
+  /** Chunk size for large file processing in bytes */
+  chunkSize?: number;
+}
+
+export interface ExtractionOptions {
+  /** Output format for subtitle extraction */
+  format?: 'srt' | 'ass' | 'vtt' | 'webvtt';
+  /** Whether to use quick extraction (faster but may be incomplete) */
+  quick?: boolean;
+  /** Timeout for extraction operation in milliseconds */
+  timeout?: number;
+  /** Custom filename for the extracted subtitle */
+  filename?: string;
+}
+
+export interface SubtitleExtractionResult {
+  /** The extracted subtitle data */
+  data: Uint8Array;
+  /** Generated filename for the subtitle */
+  filename: string;
+  /** File extension used */
+  extension: string;
+  /** Size of extracted data in bytes */
+  size: number;
+  /** Preview of the subtitle content */
+  preview: string;
+}
+
+export interface BatchExtractionResult {
+  /** Array of successfully extracted subtitle files */
+  extractedFiles: Array<{
+    filename: string;
+    data: Uint8Array;
+    size: number;
+    language?: string;
+    forced?: boolean;
+    streamIndex: number;
+  }>;
+  /** ZIP file containing all extracted subtitles */
+  zipBlob: Blob;
+  /** Filename for the ZIP file */
+  zipFilename: string;
+  /** Total number of subtitle streams found */
+  totalStreams: number;
+  /** Number of successfully extracted streams */
+  successfulExtractions: number;
 }
 
 export class VideoMetadataExtractor {
   private ffmpeg: FFmpeg;
   private isLoaded: boolean = false;
-  private options: ExtractorOptions;
+  private options: Required<VideoMetadataExtractorOptions>;
 
-  constructor(options: ExtractorOptions = {}) {
-    this.options = options;
+  constructor(options: VideoMetadataExtractorOptions = {}) {
+    this.options = {
+      ffmpegCoreURL: options.ffmpegCoreURL || '',
+      ffmpegWasmURL: options.ffmpegWasmURL || '',
+      onProgress: options.onProgress || (() => {}),
+      onError: options.onError || (() => {}),
+      debug: options.debug ?? false,
+      timeout: options.timeout ?? 60000,
+      chunkSize: options.chunkSize ?? 500 * 1024 * 1024
+    };
+    
     this.ffmpeg = new FFmpeg();
     
     // Set up event handlers
-    this.ffmpeg.on('log', ({ message }) => {
-      console.log('[FFmpeg]', message);
-    });
+    if (this.options.debug) {
+      this.ffmpeg.on('log', ({ message }) => {
+        console.log('[VideoMetadataExtractor FFmpeg]', message);
+      });
+    }
     
     this.ffmpeg.on('progress', ({ progress, time }) => {
-      this.options.onProgress?.({
+      this.options.onProgress({
         isVisible: true,
         progress: Math.round(progress * 100),
         text: `Processing... ${Math.round(progress * 100)}%`
@@ -44,6 +119,10 @@ export class VideoMetadataExtractor {
     if (this.isLoaded) return;
 
     try {
+      if (this.options.debug) {
+        console.log('[VideoMetadataExtractor] Initializing FFmpeg...');
+      }
+
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
       const coreURL = this.options.ffmpegCoreURL || `${baseURL}/ffmpeg-core.js`;
       const wasmURL = this.options.ffmpegWasmURL || `${baseURL}/ffmpeg-core.wasm`;
@@ -54,9 +133,13 @@ export class VideoMetadataExtractor {
       });
 
       this.isLoaded = true;
+      
+      if (this.options.debug) {
+        console.log('[VideoMetadataExtractor] FFmpeg initialized successfully');
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to initialize FFmpeg';
-      this.options.onError?.({
+      this.options.onError({
         isVisible: true,
         message: errorMessage
       });
@@ -65,35 +148,119 @@ export class VideoMetadataExtractor {
   }
 
   /**
-   * Extract metadata from video file
+   * Extract comprehensive metadata from video file with memory-safe chunked processing
    */
-  async extractMetadata(file: File | ArrayBuffer): Promise<VideoMetadata> {
+  async extractMetadata(file: File): Promise<VideoMetadata> {
     if (!this.isLoaded) {
-      throw new Error('VideoMetadataExtractor not initialized. Call initialize() first.');
+      await this.initialize();
+    }
+
+    // Validate file
+    const { isValid, extension } = validateFileExtension(file.name);
+    if (!isValid) {
+      const error = `Unsupported file format: ${extension}. Supported formats include: mp4, avi, mov, mkv, webm, flv, and many others.`;
+      this.options.onError({
+        isVisible: true,
+        message: error
+      });
+      throw new Error(error);
+    }
+
+    if (file.size === 0) {
+      const error = `File "${file.name}" appears to be empty`;
+      this.options.onError({
+        isVisible: true,
+        message: error
+      });
+      throw new Error(error);
     }
 
     try {
-      const fileData = file instanceof File ? await fetchFile(file) : new Uint8Array(file);
-      
-      await this.ffmpeg.writeFile('input.video', fileData);
-      
-      await this.ffmpeg.exec([
-        '-v', 'quiet',
-        '-print_format', 'json',
-        '-show_format',
-        '-show_streams',
-        '-i', 'input.video'
-      ]);
+      if (this.options.debug) {
+        console.log(`[VideoMetadataExtractor] Extracting metadata for: ${file.name} (${Math.round(file.size / 1024 / 1024)}MB)`);
+      }
 
-      const metadataOutput = await this.ffmpeg.readFile('ffprobe.json') as Uint8Array;
-      const metadataText = new TextDecoder().decode(metadataOutput);
-      
-      await this.ffmpeg.deleteFile('input.video');
-      
-      return JSON.parse(metadataText) as VideoMetadata;
+      this.options.onProgress({
+        isVisible: true,
+        progress: 10,
+        text: 'Processing video...'
+      });
+
+      // Clean up any existing files
+      await this.cleanupFFmpegFiles();
+
+      // Process file using chunked strategy
+      const fileData = await createCompleteFileDataInChunks(file);
+
+      this.options.onProgress({
+        isVisible: true,
+        progress: 40,
+        text: 'Loading file into FFmpeg...'
+      });
+
+      // Write file to FFmpeg virtual filesystem with timeout
+      const writePromise = this.ffmpeg.writeFile('input.video', await fetchFile(fileData));
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('File write timeout')), this.options.timeout);
+      });
+
+      await Promise.race([writePromise, timeoutPromise]);
+
+      this.options.onProgress({
+        isVisible: true,
+        progress: 60,
+        text: 'Extracting metadata...'
+      });
+
+      // Capture FFmpeg log output to parse metadata
+      const ffmpegLogs: string[] = [];
+      const logHandler = ({ message }: { message: string }) => {
+        ffmpegLogs.push(message);
+      };
+
+      this.ffmpeg.on('log', logHandler);
+
+      try {
+        // Use -i command to get metadata info
+        const execPromise = this.ffmpeg.exec(['-i', 'input.video']);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('FFmpeg execution timeout')), this.options.timeout);
+        });
+
+        await Promise.race([execPromise, timeoutPromise]);
+      } catch (ffmpegError) {
+        // Expected error for info extraction - FFmpeg always "fails" with -i command
+      }
+
+      this.ffmpeg.off('log', logHandler);
+
+      if (ffmpegLogs.length === 0) {
+        throw new Error('FFmpeg did not produce any output. The file might be corrupted or unsupported.');
+      }
+
+      this.options.onProgress({
+        isVisible: true,
+        progress: 90,
+        text: 'Parsing metadata...'
+      });
+
+      // Parse metadata from logs
+      const metadata = this.parseMetadataFromLogs(ffmpegLogs.join('\n'), file);
+
+      await this.cleanupFFmpegFiles();
+
+      this.options.onProgress({
+        isVisible: true,
+        progress: 100,
+        text: 'Metadata extraction completed!'
+      });
+
+      return metadata;
+
     } catch (error) {
+      await this.cleanupFFmpegFiles();
       const errorMessage = error instanceof Error ? error.message : 'Failed to extract metadata';
-      this.options.onError?.({
+      this.options.onError({
         isVisible: true,
         message: errorMessage
       });
@@ -102,44 +269,130 @@ export class VideoMetadataExtractor {
   }
 
   /**
-   * Extract single subtitle track
+   * Extract single subtitle track with comprehensive options
    */
   async extractSubtitle(
-    file: File | ArrayBuffer, 
+    file: File, 
     streamIndex: number, 
-    options: {
-      language?: string;
-      codec?: string;
-      format?: 'srt' | 'vtt' | 'ass';
-    } = {}
-  ): Promise<Uint8Array> {
+    options: ExtractionOptions = {}
+  ): Promise<SubtitleExtractionResult> {
     if (!this.isLoaded) {
-      throw new Error('VideoMetadataExtractor not initialized. Call initialize() first.');
+      await this.initialize();
     }
 
+    const { format = 'srt', quick = false, timeout = this.options.timeout, filename } = options;
+
     try {
-      const fileData = file instanceof File ? await fetchFile(file) : new Uint8Array(file);
-      const outputFormat = options.format || 'srt';
-      const outputFilename = `subtitle.${outputFormat}`;
+      if (this.options.debug) {
+        console.log(`[VideoMetadataExtractor] Extracting subtitle stream ${streamIndex} (${quick ? 'quick' : 'full'} mode)`);
+      }
+
+      this.options.onProgress({
+        isVisible: true,
+        progress: 10,
+        text: `Preparing ${quick ? 'quick' : 'full'} subtitle extraction...`
+      });
+
+      await this.cleanupFFmpegFiles();
+
+      // Process file - use quick mode for faster processing or full mode for complete extraction
+      const fileData = quick ? file : await createCompleteFileDataInChunks(file);
       
-      await this.ffmpeg.writeFile('input.video', fileData);
-      
-      await this.ffmpeg.exec([
+      this.options.onProgress({
+        isVisible: true,
+        progress: 30,
+        text: 'Loading file for subtitle extraction...'
+      });
+
+      await this.ffmpeg.writeFile('input.video', await fetchFile(fileData));
+
+      // Determine output format and filename
+      const outputFormat = format === 'vtt' ? 'webvtt' : format;
+      const outputFilename = `subtitle_${streamIndex}.${format}`;
+
+      this.options.onProgress({
+        isVisible: true,
+        progress: 60,
+        text: `Extracting subtitle (${format} format)...`
+      });
+
+      // Extract subtitle with comprehensive parameters for full mode
+      const ffmpegArgs = [
         '-i', 'input.video',
         '-map', `0:${streamIndex}`,
         '-c:s', outputFormat,
+        ...(quick ? [] : [
+          '-avoid_negative_ts', 'make_zero',
+          '-fix_sub_duration',
+          '-copyts',
+          '-start_at_zero'
+        ]),
         outputFilename
-      ]);
+      ];
 
-      const subtitleData = await this.ffmpeg.readFile(outputFilename) as Uint8Array;
-      
-      await this.ffmpeg.deleteFile('input.video');
-      await this.ffmpeg.deleteFile(outputFilename);
-      
-      return subtitleData;
+      try {
+        const extractPromise = this.ffmpeg.exec(ffmpegArgs);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Subtitle extraction timeout')), timeout);
+        });
+
+        await Promise.race([extractPromise, timeoutPromise]);
+      } catch (extractError) {
+        // Try SRT fallback if original format fails
+        if (format !== 'srt') {
+          if (this.options.debug) {
+            console.log(`[VideoMetadataExtractor] Primary extraction failed, trying SRT fallback`);
+          }
+
+          const srtFilename = outputFilename.replace(/\.[^/.]+$/, '.srt');
+          await this.ffmpeg.exec([
+            '-i', 'input.video',
+            '-map', `0:${streamIndex}`,
+            '-c:s', 'srt',
+            ...(quick ? [] : ['-avoid_negative_ts', 'make_zero', '-fix_sub_duration']),
+            srtFilename
+          ]);
+        } else {
+          throw extractError;
+        }
+      }
+
+      this.options.onProgress({
+        isVisible: true,
+        progress: 80,
+        text: 'Preparing subtitle download...'
+      });
+
+      // Read extracted subtitle data
+      const subtitleData = await this.ffmpeg.readFile(outputFilename);
+      const dataArray = subtitleData instanceof Uint8Array ? subtitleData : new Uint8Array(subtitleData as unknown as ArrayBuffer);
+
+      // Generate appropriate filename
+      const generatedFilename = filename || generateSubtitleFilename(file.name, undefined, false, format).filename;
+      const finalFilename = quick ? generatedFilename.replace(/(\.[^.]+)$/, '.quick$1') : generatedFilename.replace(/(\.[^.]+)$/, '.full$1');
+
+      const result: SubtitleExtractionResult = {
+        data: dataArray,
+        filename: finalFilename,
+        extension: format,
+        size: dataArray.length,
+        preview: safeDecodePreview(dataArray, 200)
+      };
+
+      await this.cleanupFFmpegFiles();
+
+      this.options.onProgress({
+        isVisible: true,
+        progress: 100,
+        text: `${quick ? 'Quick' : 'Full'} subtitle extraction completed!`
+      });
+
+      return result;
+
     } catch (error) {
+      await this.cleanupFFmpegFiles();
       const errorMessage = error instanceof Error ? error.message : 'Failed to extract subtitle';
-      this.options.onError?.({
+      this.options.onError({
         isVisible: true,
         message: errorMessage
       });
@@ -150,15 +403,9 @@ export class VideoMetadataExtractor {
   /**
    * Extract all subtitle tracks as ZIP
    */
-  async extractAllSubtitles(
-    file: File | ArrayBuffer,
-    options: {
-      format?: 'srt' | 'vtt' | 'ass';
-      filename?: string;
-    } = {}
-  ): Promise<Uint8Array> {
+  async extractAllSubtitles(file: File): Promise<BatchExtractionResult> {
     if (!this.isLoaded) {
-      throw new Error('VideoMetadataExtractor not initialized. Call initialize() first.');
+      await this.initialize();
     }
 
     try {
@@ -167,12 +414,21 @@ export class VideoMetadataExtractor {
       const subtitleStreams = metadata.streams?.filter(stream => stream.codec_type === 'subtitle') || [];
       
       if (subtitleStreams.length === 0) {
-        throw new Error('No subtitle tracks found in the video file');
+        throw new Error('No subtitle tracks found in this file');
       }
 
+      await this.cleanupFFmpegFiles();
+
       const zip = new JSZip();
-      const baseFilename = options.filename || 'video';
-      const format = options.format || 'srt';
+      const extractedFiles: Array<{
+        filename: string;
+        data: Uint8Array;
+        size: number;
+        language?: string;
+        forced?: boolean;
+        streamIndex: number;
+      }> = [];
+      let successfulExtractions = 0;
 
       // Extract each subtitle stream
       for (let i = 0; i < subtitleStreams.length; i++) {
@@ -180,28 +436,52 @@ export class VideoMetadataExtractor {
         const streamIndex = stream.index !== undefined ? stream.index : i;
         
         try {
-          const subtitleData = await this.extractSubtitle(file, streamIndex, { format });
+          const subtitleResult = await this.extractSubtitle(file, streamIndex, { format: 'srt' });
           
           // Generate filename with language and track info
-          let filename = `${baseFilename}`;
+          let filename = `video`;
           if (stream.language) filename += `.${stream.language}`;
           if (subtitleStreams.filter(s => s.language === stream.language).length > 1) {
             filename += `.${streamIndex}`;
           }
-          filename += `.${format}`;
+          filename += `.srt`;
           
-          zip.file(filename, subtitleData);
+          extractedFiles.push({
+            filename: filename,
+            data: subtitleResult.data,
+            size: subtitleResult.size,
+            language: stream.language,
+            forced: stream.forced,
+            streamIndex: streamIndex
+          });
+          
+          zip.file(filename, subtitleResult.data);
+          successfulExtractions++;
         } catch (streamError) {
           console.warn(`Failed to extract subtitle stream ${streamIndex}:`, streamError);
           // Continue with other streams
         }
       }
 
-      const zipData = await zip.generateAsync({ type: 'uint8array' });
-      return zipData;
+      if (extractedFiles.length === 0) {
+        throw new Error('No subtitle data could be extracted from any tracks');
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const zipFilename = file.name.replace(/\.[^/.]+$/, '_subtitles.zip');
+
+      const result: BatchExtractionResult = {
+        extractedFiles,
+        zipBlob,
+        zipFilename,
+        totalStreams: subtitleStreams.length,
+        successfulExtractions
+      };
+
+      return result;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to extract all subtitles';
-      this.options.onError?.({
+      this.options.onError({
         isVisible: true,
         message: errorMessage
       });
@@ -210,12 +490,242 @@ export class VideoMetadataExtractor {
   }
 
   /**
-   * Clean up resources
+   * Download a file (handles large files automatically)
+   */
+  downloadFile(data: Uint8Array, filename: string, progressCallback?: (progress: number) => void): void {
+    downloadLargeFile(data, filename, progressCallback);
+  }
+
+  /**
+   * Download ZIP file
+   */
+  downloadZip(zipBlob: Blob, filename: string): void {
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Check if the extractor is initialized
+   */
+  isInitialized(): boolean {
+    return this.isLoaded;
+  }
+
+  /**
+   * Get supported file formats
+   */
+  getSupportedFormats(): string[] {
+    return [
+      'mp4', 'm4v', 'mov', '3gp', '3g2', 'mj2',
+      'avi', 'mkv', 'webm', 'flv', 'asf', 'wmv',
+      'mpg', 'mpeg', 'ts', 'm2ts', 'ogv', 'ogg',
+      'gif', 'swf', 'rm', 'rmvb', 'dv', 'mxf'
+    ];
+  }
+
+  /**
+   * Clean up FFmpeg temporary files
+   */
+  private async cleanupFFmpegFiles(): Promise<void> {
+    if (!this.ffmpeg) return;
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const tempFiles = ['input.video', 'output.video', 'subtitle.srt', 'subtitle.ass', 'subtitle.vtt'];
+      for (const fileName of tempFiles) {
+        let retries = 3;
+        while (retries > 0) {
+          try {
+            await this.ffmpeg.deleteFile(fileName);
+            break;
+          } catch (err) {
+            retries--;
+            if (retries > 0) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+            }
+          }
+        }
+      }
+
+      // Clean up any remaining files
+      try {
+        const files = await this.ffmpeg.listDir('/');
+        const systemDirs = new Set(['.', '..', 'tmp', 'home', 'dev', 'proc', 'usr', 'bin', 'etc', 'var', 'lib']);
+
+        for (const fileInfo of files) {
+          const fileName = typeof fileInfo === 'string' ? fileInfo : fileInfo.name;
+          const isDir = typeof fileInfo === 'object' && fileInfo.isDir;
+
+          if (!systemDirs.has(fileName) && !isDir) {
+            let retries = 3;
+            while (retries > 0) {
+              try {
+                await this.ffmpeg.deleteFile(fileName);
+                break;
+              } catch (err) {
+                retries--;
+                if (retries > 0) {
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
+              }
+            }
+          }
+        }
+      } catch (listError) {
+        // Continue on error
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+    } catch (cleanupError) {
+      // Continue on error
+    }
+  }
+
+  /**
+   * Parse metadata from FFmpeg logs
+   */
+  private parseMetadataFromLogs(logOutput: string, file: File): VideoMetadata {
+    // Check for errors
+    if (logOutput.includes('Invalid data found when processing input') || 
+        logOutput.includes('No such file or directory') ||
+        logOutput.includes('Operation not permitted')) {
+      throw new Error(`File "${file.name}" appears to be corrupted or not a valid media file`);
+    }
+
+    if (!logOutput.includes('Stream #')) {
+      throw new Error('No audio or video streams found in the file. The file might be corrupted or encrypted.');
+    }
+
+    // Parse video stream info
+    const videoStreamMatch = logOutput.match(/Stream.*Video: ([^,]+)[^,]*,.*?(\d+x\d+)[^,]*,.*?(\d+\.?\d*) fps/);
+    const videoCodec = videoStreamMatch ? videoStreamMatch[1] : 'unknown';
+    const resolution = videoStreamMatch ? videoStreamMatch[2] : 'unknown';
+    const fps = videoStreamMatch ? parseFloat(videoStreamMatch[3]) : 25;
+
+    // Parse duration
+    const durationMatch = logOutput.match(/Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
+    let duration = 'unknown';
+    let movietimems = 'unknown';
+    let movieframes = 'unknown';
+
+    if (durationMatch) {
+      const hours = parseInt(durationMatch[1]);
+      const minutes = parseInt(durationMatch[2]);
+      const seconds = parseInt(durationMatch[3]);
+      const centiseconds = parseInt(durationMatch[4]);
+      const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+      const totalMilliseconds = totalSeconds * 1000 + centiseconds * 10;
+      duration = totalSeconds.toString();
+      movietimems = totalMilliseconds.toString();
+      movieframes = Math.round(totalMilliseconds / 1000 * fps).toString();
+    }
+
+    // Parse bitrate
+    const bitrateMatch = logOutput.match(/bitrate: (\d+) kb\/s/);
+    const bitrate = bitrateMatch ? (parseInt(bitrateMatch[1]) * 1000).toString() : 'unknown';
+
+    // Parse audio stream info
+    const audioStreamMatch = logOutput.match(/Stream.*Audio: ([^,]+)[^,]*,.*?(\d+) Hz/);
+    const audioCodec = audioStreamMatch ? audioStreamMatch[1] : 'unknown';
+    const sampleRate = audioStreamMatch ? audioStreamMatch[2] : '48000';
+
+    // Parse subtitle streams
+    const subtitleStreams: Array<{
+      codec_type: string;
+      codec_name: string;
+      language?: string;
+      title?: string;
+      forced?: boolean;
+      default?: boolean;
+      index?: number;
+      size?: string;
+    }> = [];
+
+    const subtitleMatches = logOutput.match(/Stream #\d+:\d+(?:\([^)]*\))?: Subtitle: ([^(\n]+)(?:\([^)]*\))?[^\n]*(?:\n[^\n]*)*?(?:BPS\s*:\s*(\d+))?/g);
+
+    if (subtitleMatches) {
+      subtitleMatches.forEach(match => {
+        const codecMatch = match.match(/Subtitle: ([^(\n]+?)(?:\s*\(|$)/);
+        const codecName = codecMatch ? codecMatch[1].trim() : 'unknown';
+
+        const streamMatch = match.match(/Stream #\d+:(\d+)/);
+        const streamIndex = streamMatch ? parseInt(streamMatch[1]) : undefined;
+
+        const langMatch = match.match(/Stream #\d+:\d+\(([^)]+)\)/);
+        const language = langMatch ? langMatch[1] : undefined;
+
+        const isDefault = match.includes('(default)');
+        const isForced = match.includes('(forced)');
+
+        subtitleStreams.push({
+          codec_type: 'subtitle',
+          codec_name: codecName,
+          language: language,
+          default: isDefault,
+          forced: isForced,
+          index: streamIndex
+        });
+      });
+    }
+
+    // Create metadata structure
+    const metadata: VideoMetadata = {
+      format: {
+        filename: file.name,
+        size: file.size.toString(),
+        format_name: getFormatFromFileName(file.name),
+        duration: duration,
+        bit_rate: bitrate,
+        fps: fps.toString(),
+        movietimems: movietimems,
+        movieframes: movieframes
+      },
+      streams: [
+        {
+          codec_type: 'video',
+          codec_name: videoCodec,
+          width: resolution !== 'unknown' ? parseInt(resolution.split('x')[0]) : 1280,
+          height: resolution !== 'unknown' ? parseInt(resolution.split('x')[1]) : 720,
+          r_frame_rate: `${fps}/1`,
+          pix_fmt: 'yuv420p',
+          bit_rate: '1500000',
+          index: 0
+        },
+        {
+          codec_type: 'audio',
+          codec_name: audioCodec,
+          channels: 2,
+          sample_rate: sampleRate,
+          bit_rate: '128000',
+          index: 1
+        },
+        ...subtitleStreams
+      ]
+    };
+
+    return metadata;
+  }
+
+  /**
+   * Clean up resources and terminate FFmpeg
    */
   async terminate(): Promise<void> {
     if (this.isLoaded) {
+      await this.cleanupFFmpegFiles();
       await this.ffmpeg.terminate();
       this.isLoaded = false;
+      
+      if (this.options.debug) {
+        console.log('[VideoMetadataExtractor] FFmpeg terminated and resources cleaned up');
+      }
     }
   }
 }

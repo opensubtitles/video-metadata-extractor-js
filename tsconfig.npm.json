@@ -20,7 +20,9 @@
     "noUnusedParameters": false
   },
   "include": [
-    "src/lib/**/*"
+    "src/lib/**/*",
+    "src/types/**/*",
+    "src/hooks/useVideoMetadata.ts"
   ],
   "exclude": [
     "src/components/**/*",
