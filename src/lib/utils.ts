@@ -23,8 +23,8 @@ export const createCompleteFileDataInChunks = async (
   file: File,
   onProgress?: (progress: number, text: string) => void
 ): Promise<Blob> => {
-  const processor = createFileProcessor(true);
-  return processor.createCompleteFileData(file, onProgress);
+  const processor = createFileProcessor({ debug: true });
+  return processor.processCompleteFile(file);
 };
 
 /**
@@ -36,8 +36,24 @@ export const downloadLargeFile = (
   filename: string, 
   progressCallback?: (progress: number) => void
 ): void => {
-  const processor = createFileProcessor(true);
-  processor.downloadLargeFile(data, filename, progressCallback);
+  // Create a simple download function since the FileProcessor interface changed
+  const MAX_BLOB_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
+  
+  if (data.length < MAX_BLOB_SIZE) {
+    // Standard blob download for smaller files
+    const blob = new Blob([data], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } else {
+    // For large files, this would need the full FileProcessor implementation
+    throw new Error('Large file download requires full FileProcessor implementation');
+  }
 };
 
 /**
