@@ -165,7 +165,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
                   `}>
                     {isDragOver ? 'Release to upload' : 'Drag & drop files/folders or click to browse'}
                   </p>
-                  <div className="flex items-center justify-center gap-2 text-sm text-gray-500 flex-wrap">
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-500 flex-wrap mb-4">
                     <span>MP4</span>
                     <span>•</span>
                     <span>MKV</span>
@@ -181,6 +181,24 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
                     <span>WMV</span>
                     <span>•</span>
                     <span className="text-gray-400">and other video formats</span>
+                  </div>
+                  
+                  {/* OpenSubtitles Branding */}
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+                    <span>Made with</span>
+                    <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                    </svg>
+                    <span>by</span>
+                    <a 
+                      href="https://github.com/opensubtitles/video-metadata-extractor-js" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      OpenSubtitles
+                    </a>
                   </div>
                 </>
               )}
