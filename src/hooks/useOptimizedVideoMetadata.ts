@@ -6,7 +6,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL, fetchFile } from '@ffmpeg/util';
-import * as JSZip from 'jszip';
+import JSZip from 'jszip';
 
 import { 
   VideoMetadata, 
@@ -554,36 +554,40 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
     const initializeFFmpeg = async () => {
       const ffmpeg = ffmpegRef.current;
       
-      console.log('[FFMPEG DEBUG] Initializing FFmpeg...');
-      
       if (ffmpeg.loaded) {
-        console.log('[FFMPEG DEBUG] FFmpeg already loaded');
         setIsLoaded(true);
         return;
       }
 
       try {
-        console.log('[FFMPEG DEBUG] Loading FFmpeg with URLs:', {
-          coreURL: FFMPEG_CONSTANTS.CORE_URLS.CORE_JS,
-          wasmURL: FFMPEG_CONSTANTS.CORE_URLS.WASM
-        });
-        
-        const coreURL = await toBlobURL(FFMPEG_CONSTANTS.CORE_URLS.CORE_JS, 'text/javascript');
-        const wasmURL = await toBlobURL(FFMPEG_CONSTANTS.CORE_URLS.WASM, 'application/wasm');
-        
-        console.log('[FFMPEG DEBUG] Blob URLs created:', { coreURL, wasmURL });
+        // Use the same pattern as the original working hook
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
         
         await ffmpeg.load({
-          coreURL,
-          wasmURL,
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
         });
         
-        console.log('[FFMPEG DEBUG] FFmpeg loaded successfully');
         setIsLoaded(true);
       } catch (err) {
-        console.error('[FFMPEG DEBUG] Failed to load FFmpeg:', err);
-        const errorMessage = err instanceof Error ? err.message : ERROR_MESSAGES.FFMPEG.INIT_FAILED;
-        showError(`Failed to initialize FFmpeg: ${errorMessage}`);
+        console.error('Failed to load FFmpeg:', err);
+        
+        let errorMessage = 'Failed to load FFmpeg';
+        
+        if (err instanceof Error) {
+          const message = err.message.toLowerCase();
+          if (message.includes('network') || message.includes('fetch')) {
+            errorMessage = 'Failed to load FFmpeg: Network error. Please check your internet connection and try refreshing the page.';
+          } else if (message.includes('wasm')) {
+            errorMessage = 'Failed to load FFmpeg: WebAssembly not supported. Please use a modern browser (Chrome 57+, Firefox 52+, Safari 11+, Edge 79+).';
+          } else if (message.includes('cors')) {
+            errorMessage = 'Failed to load FFmpeg: CORS error. Please try refreshing the page.';
+          } else {
+            errorMessage = `Failed to load FFmpeg: ${err.message}`;
+          }
+        }
+        
+        showError(errorMessage);
       }
     };
 
