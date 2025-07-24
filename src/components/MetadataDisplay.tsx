@@ -12,6 +12,14 @@ interface MetadataDisplayProps {
 export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, selectedFile, extractSubtitle, extractStream, extractAllSubtitles }) => {
   if (!metadata) return null;
 
+  // Debug logging
+  console.log('[METADATA DISPLAY DEBUG]', {
+    selectedFile: selectedFile?.name,
+    extractStream: typeof extractStream,
+    extractSubtitle: typeof extractSubtitle,
+    streamsCount: metadata.streams?.length
+  });
+
 
   const formatFileSize = (bytes: string): string => {
     const size = parseInt(bytes);
@@ -197,6 +205,16 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
               await extractStream(selectedFile, streamIndex, stream.codec_type, stream.codec_name);
             }
           };
+
+          // Debug logging for each stream
+          console.log('[STREAM DEBUG]', {
+            index,
+            codec_type: stream.codec_type,
+            hasSelectedFile: !!selectedFile,
+            hasExtractStream: !!extractStream,
+            hasExtractSubtitle: !!extractSubtitle,
+            shouldShowVideoAudioButton: (stream.codec_type === 'video' || stream.codec_type === 'audio') && selectedFile && extractStream
+          });
 
           return (
             <div key={index} className="relative">
