@@ -42,6 +42,7 @@ const OptimizedApp: React.FC = () => {
     selectedFile, 
     currentMethod, 
     extractSubtitle, 
+    extractStream,
     extractAllSubtitles 
   } = useOptimizedVideoMetadata();
 
@@ -344,6 +345,7 @@ const OptimizedApp: React.FC = () => {
                       metadata={item.metadata} 
                       selectedFile={item.file} 
                       extractSubtitle={extractSubtitle}
+                      extractStream={extractStream}
                       extractAllSubtitles={extractAllSubtitles} 
                     />
                   )}
@@ -368,6 +370,7 @@ const OptimizedApp: React.FC = () => {
               metadata={metadata} 
               selectedFile={selectedFile} 
               extractSubtitle={extractSubtitle} 
+              extractStream={extractStream}
               extractAllSubtitles={extractAllSubtitles} 
             />
           </div>
