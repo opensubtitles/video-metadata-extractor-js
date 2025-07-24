@@ -25,6 +25,17 @@ interface BatchProgress {
 
 const App: React.FC = () => {
   const { metadata, progress, error, handleFileSelect, hideError, hideProgress, isLoaded, selectedFile, currentMethod, extractSubtitle, extractStream, extractAllSubtitles } = useSmartMetadata();
+  
+  // Auto-scroll to metadata results
+  const scrollToResults = () => {
+    const resultsElement = document.getElementById('video-metadata-results');
+    if (resultsElement) {
+      resultsElement.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      });
+    }
+  };
   const [fileMetadataList, setFileMetadataList] = useState<FileMetadata[]>([]);
   const [processingQueue, setProcessingQueue] = useState<File[]>([]);
   const [currentlyProcessing, setCurrentlyProcessing] = useState<File | null>(null);
@@ -191,6 +202,11 @@ const App: React.FC = () => {
         return updated;
       });
       
+      // Auto-scroll to results after a short delay to ensure DOM is updated
+      setTimeout(() => {
+        scrollToResults();
+      }, 500);
+      
       // Longer delay to ensure state is fully updated and cleanup is complete before unlocking
       setTimeout(() => {
         console.log(`[BATCH DEBUG] Unlocking processing after completion of: ${completedFile.name}`);
@@ -198,7 +214,7 @@ const App: React.FC = () => {
         setIsProcessingLocked(false); // Unlock processing for next file
       }, 2000); // Increased delay to allow for proper cleanup
     }
-  }, [metadata, currentlyProcessing, currentMethod, lastProcessedFile]);
+  }, [metadata, currentlyProcessing, currentMethod, lastProcessedFile, scrollToResults]);
 
   // Handle errors
   useEffect(() => {

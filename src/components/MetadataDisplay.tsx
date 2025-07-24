@@ -83,7 +83,7 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
   };
 
   return (
-    <div className="mt-8">
+    <div id="video-metadata-results" className="mt-8">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-gray-800">Video Metadata</h2>
         {showExtractAllButton && (
