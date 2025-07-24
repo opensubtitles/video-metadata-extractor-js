@@ -124,18 +124,17 @@ const App: React.FC = () => {
           : item
       ));
       
-      // Start processing this file with a longer delay to ensure proper cleanup and memory management
-      const fileBeingProcessed: File = nextFile;
+      // Start processing this file with a longer delay to ensure proper cleanup and memory management  
       setTimeout(() => {
-        console.log(`[BATCH DEBUG] Calling handleFileSelect for: ${fileBeingProcessed.name}`);
-        handleFileSelect(fileBeingProcessed);
+        console.log(`[BATCH DEBUG] Calling handleFileSelect for: ${nextFile.name}`);
+        handleFileSelect(nextFile);
         
         // Add a timeout to prevent processing from getting stuck
         setTimeout(() => {
-          if (currentlyProcessing === fileBeingProcessed && isProcessingLocked) {
-            console.log(`[BATCH DEBUG] Processing timeout for: ${fileBeingProcessed.name}`);
+          if (currentlyProcessing === nextFile && isProcessingLocked) {
+            console.log(`[BATCH DEBUG] Processing timeout for: ${nextFile.name}`);
             setFileMetadataList(prev => prev.map(item => 
-              item.file === fileBeingProcessed 
+              item.file === nextFile 
                 ? { ...item, error: 'Processing timeout - file took too long to process', isProcessing: false }
                 : item
             ));

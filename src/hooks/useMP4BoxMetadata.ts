@@ -545,7 +545,7 @@ export const useMP4BoxMetadata = () => {
         
         const reader = new FileReader();
         reader.onload = (e) => {
-          const loadStartTime = performance.now();
+          // const loadStartTime = performance.now();
           const arrayBuffer = e.target?.result as ArrayBuffer;
           
           showProgress(`Loading ${streamType} stream into MP4Box...`, 35);
@@ -563,7 +563,7 @@ export const useMP4BoxMetadata = () => {
               showProgress(`Preparing ${streamType} stream download...`, 80);
               
               // Combine all extracted data
-              const combineStartTime = performance.now();
+              // const combineStartTime = performance.now();
               const totalLength = extractedData.reduce((sum, arr) => sum + arr.length, 0);
               const combinedData = new Uint8Array(totalLength);
               let offset = 0;
@@ -603,7 +603,7 @@ export const useMP4BoxMetadata = () => {
                 }
               });
               
-              const totalTime = performance.now() - startTime;
+              // const totalTime = performance.now() - startTime;
               
               // Show completion message and let user manually close
               showProgress(`${streamType} stream extraction completed successfully! Download should start automatically.`, 100);
@@ -622,7 +622,7 @@ export const useMP4BoxMetadata = () => {
       });
       
     } catch (err) {
-      const totalTime = performance.now() - startTime;
+      // const totalTime = performance.now() - startTime;
       
       let errorMessage = 'Failed to extract stream with MP4Box';
       if (err instanceof Error) {

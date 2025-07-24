@@ -99,6 +99,15 @@ const generateSubtitleFilename = (movieFilename: string, language?: string, isFo
   return { filename, extension };
 };
 
+// Helper function to safely decode data for preview
+const safeDecodePreview = (data: Uint8Array | string, maxLength: number = 200): string => {
+  if (typeof data === 'string') {
+    return data.slice(0, maxLength);
+  }
+  const previewData = data.slice(0, Math.min(maxLength, data.length));
+  return new TextDecoder().decode(previewData);
+};
+
 // Helper function to create complete file data using streaming chunks for 100% subtitle extraction
 // Uses unified chunked strategy for all file sizes to keep implementation simple and consistent
 const createCompleteFileDataInChunks = async (file: File): Promise<Blob> => {
@@ -835,8 +844,26 @@ export const useVideoMetadata = () => {
       
       console.log(`[QUICK EXTRACTION DEBUG] File size: ${fileSize} bytes (${Math.round(fileSize / 1024 / 1024)}MB), extension: ${extension}`);
       
+      // Generate proper filename based on movie name - add "quick" suffix
+      const { filename: baseFilename, extension: outputExt } = generateSubtitleFilename(
+        file.name, 
+        language, 
+        isForced, 
+        codecName
+      );
+      
+      // Add "quick" suffix to distinguish from full extraction
+      const outputFilename = baseFilename.replace(/(\.[^.]+)$/, '.quick$1');
+      console.log(`[QUICK EXTRACTION DEBUG] Generated filename: ${outputFilename}, output extension: ${outputExt}`);
+      
+      // Determine output format based on extension
+      let outputFormat = outputExt;
+      if (outputExt === 'vtt') {
+        outputFormat = 'webvtt';
+      }
+      console.log(`[QUICK EXTRACTION DEBUG] Output format: ${outputFormat}`);
+      
       // Support files up to 50GB with progressive chunking
-      const maxChunkSize = 64 * 1024 * 1024; // 64MB chunks for quick extraction
       const isVeryLargeFile = fileSize > 5 * 1024 * 1024 * 1024; // > 5GB
       
       // For massive files (>5GB), use progressive extraction instead of loading chunks into memory
@@ -864,7 +891,7 @@ export const useVideoMetadata = () => {
             console.log(`[QUICK EXTRACTION DEBUG] Complete progressive data size: ${completeData.length} bytes`);
             
             if (completeData.length > 0) {
-              const preview = new TextDecoder().decode(completeData.slice(0, Math.min(200, completeData.length)));
+              const preview = safeDecodePreview(completeData, 200);
               console.log(`[QUICK EXTRACTION DEBUG] Progressive content preview:`, preview);
             }
             
@@ -911,25 +938,6 @@ export const useVideoMetadata = () => {
       console.log(`[QUICK EXTRACTION DEBUG] Writing file to FFmpeg virtual filesystem...`);
       await ffmpegRef.current.writeFile('input.video', await fetchFile(fileData));
       console.log(`[QUICK EXTRACTION DEBUG] File write completed`);
-      
-      // Generate proper filename based on movie name - add "quick" suffix
-      const { filename: baseFilename, extension: outputExt } = generateSubtitleFilename(
-        file.name, 
-        language, 
-        isForced, 
-        codecName
-      );
-      
-      // Add "quick" suffix to distinguish from full extraction
-      const outputFilename = baseFilename.replace(/(\.[^.]+)$/, '.quick$1');
-      console.log(`[QUICK EXTRACTION DEBUG] Generated filename: ${outputFilename}, output extension: ${outputExt}`);
-      
-      // Determine output format based on extension
-      let outputFormat = outputExt;
-      if (outputExt === 'vtt') {
-        outputFormat = 'webvtt';
-      }
-      console.log(`[QUICK EXTRACTION DEBUG] Output format: ${outputFormat}`);
       
       try {
         // Quick extraction - first try without time limit to see if subtitles exist
@@ -994,7 +1002,7 @@ export const useVideoMetadata = () => {
           console.log(`[QUICK EXTRACTION DEBUG] SRT file read successfully, size: ${subtitleData.length} bytes`);
           
           if (subtitleData.length > 0) {
-            const preview = new TextDecoder().decode(subtitleData.slice(0, Math.min(200, subtitleData.length)));
+            const preview = safeDecodePreview(subtitleData, 200);
             console.log(`[QUICK EXTRACTION DEBUG] SRT file content preview:`, preview);
           }
           
@@ -1079,7 +1087,7 @@ export const useVideoMetadata = () => {
               const completeData = middleSubtitleData;
               console.log(`[QUICK EXTRACTION DEBUG] Using complete middle chunk data, size: ${completeData.length} bytes`);
               
-              const preview = new TextDecoder().decode(completeData.slice(0, Math.min(200, completeData.length)));
+              const preview = safeDecodePreview(completeData, 200);
               console.log(`[QUICK EXTRACTION DEBUG] Middle chunk content preview:`, preview);
               
               const blob = new Blob([completeData], { type: 'text/plain' });
@@ -1103,7 +1111,7 @@ export const useVideoMetadata = () => {
         }
         
         if (subtitleData.length > 0) {
-          const preview = new TextDecoder().decode(subtitleData.slice(0, Math.min(200, subtitleData.length)));
+          const preview = safeDecodePreview(subtitleData, 200);
           console.log(`[QUICK EXTRACTION DEBUG] Primary file content preview:`, preview);
         }
         
@@ -1152,7 +1160,7 @@ export const useVideoMetadata = () => {
             console.log(`[QUICK EXTRACTION DEBUG] Alternative file read successfully, size: ${subtitleData.length} bytes`);
             
             if (subtitleData.length > 0) {
-              const preview = new TextDecoder().decode(subtitleData.slice(0, Math.min(200, subtitleData.length)));
+              const preview = safeDecodePreview(subtitleData, 200);
               console.log(`[QUICK EXTRACTION DEBUG] Alternative file content preview:`, preview);
               
               const completeData = subtitleData;
@@ -1372,7 +1380,7 @@ export const useVideoMetadata = () => {
                 
                 // Log first few bytes to see if there's actual content
                 if (subtitleData.length > 0) {
-                  const preview = new TextDecoder().decode(subtitleData.slice(0, Math.min(200, subtitleData.length)));
+                  const preview = safeDecodePreview(subtitleData, 200);
                   console.log(`[FULL EXTRACTION DEBUG] File content preview:`, preview);
                 }
                 
@@ -1439,7 +1447,7 @@ export const useVideoMetadata = () => {
                 console.log(`[FULL EXTRACTION DEBUG] Simple file read successfully, size: ${subtitleData.length} bytes`);
                 
                 if (subtitleData.length > 0) {
-                  const preview = new TextDecoder().decode(subtitleData.slice(0, Math.min(200, subtitleData.length)));
+                  const preview = safeDecodePreview(subtitleData, 200);
                   console.log(`[FULL EXTRACTION DEBUG] Simple file content preview:`, preview);
                   
                   // Create download with our expected filename
@@ -1530,7 +1538,7 @@ export const useVideoMetadata = () => {
               
               // Log first few bytes to see if there's actual content
               if (subtitleData.length > 0) {
-                const preview = new TextDecoder().decode(subtitleData.slice(0, Math.min(200, subtitleData.length)));
+                const preview = safeDecodePreview(subtitleData, 200);
                 console.log(`[FULL EXTRACTION DEBUG] SRT file content preview:`, preview);
               }
               
@@ -1601,7 +1609,7 @@ export const useVideoMetadata = () => {
         
         // Log first few bytes to see if there's actual content
         if (subtitleData.length > 0) {
-          const preview = new TextDecoder().decode(subtitleData.slice(0, Math.min(200, subtitleData.length)));
+          const preview = safeDecodePreview(subtitleData, 200);
           console.log(`[FULL EXTRACTION DEBUG] File content preview:`, preview);
         }
         
@@ -1962,9 +1970,10 @@ export const useVideoMetadata = () => {
           console.log(`[EXTRACT ALL DEBUG] Read subtitle file: ${outputFilename}, size: ${subtitleData.length} bytes`);
 
           if (subtitleData.length > 0) {
+            const dataAsUint8Array = subtitleData instanceof Uint8Array ? subtitleData : new TextEncoder().encode(subtitleData);
             extractedFiles.push({
               filename: outputFilename,
-              data: subtitleData
+              data: dataAsUint8Array
             });
 
             // Add to ZIP
