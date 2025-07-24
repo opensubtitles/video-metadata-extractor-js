@@ -166,7 +166,6 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
               streamInfo['Bitrate'] = `${Math.round(parseInt(stream.bit_rate) / 1000)} kbps`;
             }
             if (stream.duration) streamInfo['Duration'] = stream.duration;
-            if (stream.level) streamInfo['Level'] = stream.level;
             if (stream.codec_tag) streamInfo['Codec Tag'] = stream.codec_tag;
             if (stream.codec_tag_string) streamInfo['Codec Tag String'] = stream.codec_tag_string;
             if (stream.codec_long_name) streamInfo['Codec Long Name'] = stream.codec_long_name;

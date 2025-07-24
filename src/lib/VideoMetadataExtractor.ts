@@ -14,19 +14,15 @@ import {
   ErrorState, 
   FFmpegError, 
   FileProcessingError,
-  SubtitleExtractionError,
-  Result,
   SubtitleStream,
   VideoStream,
-  AudioStream,
-  MediaStream
+  AudioStream
 } from '../types';
 import { 
   generateSubtitleFilename, 
   safeDecodePreview, 
   createCompleteFileDataInChunks,
   downloadLargeFile,
-  validateFileExtension,
   getFormatFromFileName 
 } from './utils';
 import { 
@@ -37,11 +33,9 @@ import {
 } from '../constants';
 import { 
   withRetry,
-  safeAsync,
   validateFile,
   sleep
 } from '../utils/common';
-import { createFileProcessor } from '../utils/fileProcessor';
 
 export interface VideoMetadataExtractorOptions {
   /** Custom FFmpeg core URL */
@@ -129,7 +123,7 @@ export class VideoMetadataExtractor {
       });
     }
     
-    this.ffmpeg.on('progress', ({ progress, time }) => {
+    this.ffmpeg.on('progress', ({ progress }) => {
       this.options.onProgress({
         isVisible: true,
         progress: Math.round(progress * 100),
@@ -508,8 +502,8 @@ export class VideoMetadataExtractor {
   /**
    * Download a file (handles large files automatically)
    */
-  downloadFile(data: Uint8Array, filename: string, progressCallback?: (progress: number) => void): void {
-    downloadLargeFile(data, filename, progressCallback);
+  downloadFile(data: Uint8Array, filename: string): void {
+    downloadLargeFile(data, filename);
   }
 
   /**

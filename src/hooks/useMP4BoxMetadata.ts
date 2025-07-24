@@ -468,7 +468,6 @@ export const useMP4BoxMetadata = () => {
   };
 
   const extractStream = useCallback(async (file: File, streamIndex: number, streamType: string, codecName?: string) => {
-    const startTime = performance.now();
 
     try {
       showProgress(`Preparing ${streamType} stream ${streamIndex}...`, 10);

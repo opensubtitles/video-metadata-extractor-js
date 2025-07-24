@@ -20,8 +20,7 @@ export { getFormatFromFileName, generateSubtitleFilename, safeDecodePreview };
  * Now uses the centralized FileProcessor for consistency
  */
 export const createCompleteFileDataInChunks = async (
-  file: File,
-  onProgress?: (progress: number, text: string) => void
+  file: File
 ): Promise<Blob> => {
   const processor = createFileProcessor({ debug: true });
   return processor.processCompleteFile(file);
@@ -33,8 +32,7 @@ export const createCompleteFileDataInChunks = async (
  */
 export const downloadLargeFile = (
   data: Uint8Array, 
-  filename: string, 
-  progressCallback?: (progress: number) => void
+  filename: string
 ): void => {
   // Create a simple download function since the FileProcessor interface changed
   const MAX_BLOB_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
