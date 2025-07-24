@@ -2,7 +2,7 @@
  * Optimized App component with simplified batch processing and better state management
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FileUpload } from './FileUpload';
 import { ProgressBar } from './ProgressBar';
 import { MetadataDisplay } from './MetadataDisplay';
@@ -141,12 +141,14 @@ const OptimizedApp: React.FC = () => {
     
     // Update progress
     const currentIndex = items.length - queue.length + 1;
+    const baseProgress = ((currentIndex - 1) / items.length) * 100;
+    
     setBatchProgress(prev => ({
       ...prev,
       currentFile: currentIndex,
       fileName: currentFile.name,
       text: `Processing ${currentIndex}/${items.length}: ${currentFile.name}`,
-      progress: Math.round(((currentIndex - 1) / items.length) * 100)
+      progress: Math.round(baseProgress)
     }));
 
     // Update file list to show current processing
@@ -226,6 +228,25 @@ const OptimizedApp: React.FC = () => {
       progress: 0
     });
   }, []);
+
+  // Update batch progress when individual file progress changes
+  useEffect(() => {
+    if (currentlyProcessing && batchProgress.isVisible && processingQueue.length > 0) {
+      const currentIndex = batchProgress.currentFile;
+      const totalFiles = batchProgress.totalFiles;
+      
+      // Calculate overall progress: completed files + current file progress
+      const completedFilesProgress = ((currentIndex - 1) / totalFiles) * 100;
+      const currentFileProgress = (progress.progress / totalFiles);
+      const overallProgress = completedFilesProgress + currentFileProgress;
+      
+      setBatchProgress(prev => ({
+        ...prev,
+        progress: Math.round(Math.min(overallProgress, 100)),
+        text: progress.text || prev.text
+      }));
+    }
+  }, [progress.progress, progress.text, currentlyProcessing, batchProgress.isVisible, batchProgress.currentFile, batchProgress.totalFiles, processingQueue.length]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
