@@ -105,5 +105,6 @@ export {
   isSubtitleStream
 } from '../types';
 
-// React hook (for React applications)
+// React hooks (for React applications)
 export { useVideoMetadata } from '../hooks/useVideoMetadata';
+export { useOptimizedVideoMetadata } from '../hooks/useOptimizedVideoMetadata';
