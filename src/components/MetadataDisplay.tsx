@@ -17,7 +17,8 @@ export const MetadataDisplay: React.FC<MetadataDisplayProps> = ({ metadata, sele
     selectedFile: selectedFile?.name,
     extractStream: typeof extractStream,
     extractSubtitle: typeof extractSubtitle,
-    streamsCount: metadata.streams?.length
+    streamsCount: metadata.streams?.length,
+    extractStreamFunction: extractStream?.toString?.().substring(0, 100)
   });
 
 

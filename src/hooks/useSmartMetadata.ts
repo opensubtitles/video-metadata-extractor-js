@@ -34,6 +34,16 @@ export const useSmartMetadata = () => {
 
   // Return the appropriate hook's state based on the selected file
   const currentHook = selectedFile && shouldUseMp4Box(selectedFile) ? mp4boxHook : ffmpegHook;
+  const usingMp4Box = selectedFile && shouldUseMp4Box(selectedFile);
+  
+  // Debug logging
+  console.log('[SMART METADATA DEBUG]', {
+    selectedFile: selectedFile?.name,
+    extension: selectedFile ? getFileExtension(selectedFile.name) : 'none',
+    usingMp4Box,
+    currentMethod: selectedFile ? (shouldUseMp4Box(selectedFile) ? 'MP4Box' : 'FFmpeg') : 'FFmpeg',
+    hasExtractStream: !!currentHook.extractStream
+  });
 
   return {
     metadata: currentHook.metadata,
