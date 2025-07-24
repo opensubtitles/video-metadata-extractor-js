@@ -125,6 +125,12 @@ const OptimizedApp: React.FC = () => {
         text: 'All files processed!',
         progress: 100
       }));
+      
+      // Auto-hide progress bar after 3 seconds
+      setTimeout(() => {
+        setBatchProgress(prev => ({ ...prev, isVisible: false }));
+      }, 3000);
+      
       return;
     }
 
