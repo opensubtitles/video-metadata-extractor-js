@@ -10,10 +10,15 @@ interface FileUploadProps {
   currentMethod?: string;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultipleFilesSelect, isLoaded, currentMethod }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultipleFilesSelect, isLoaded }) => {
   const [isDragOver, setIsDragOver] = useState(false);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isLoaded) {
+      console.log('[FILE UPLOAD] FFmpeg not loaded, ignoring file selection');
+      return;
+    }
+    
     const fileList = event.target.files;
     if (fileList) {
       const videoFiles = processSelectedFiles(fileList);
@@ -29,13 +34,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
   const handleDragOver = (event: React.DragEvent<HTMLLabelElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setIsDragOver(true);
+    if (isLoaded) {
+      setIsDragOver(true);
+    }
   };
 
   const handleDragEnter = (event: React.DragEvent<HTMLLabelElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setIsDragOver(true);
+    if (isLoaded) {
+      setIsDragOver(true);
+    }
   };
 
   const handleDragLeave = (event: React.DragEvent<HTMLLabelElement>) => {
@@ -48,6 +57,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
     event.preventDefault();
     event.stopPropagation();
     setIsDragOver(false);
+    
+    if (!isLoaded) {
+      console.log('[FILE UPLOAD] FFmpeg not loaded, ignoring drag and drop');
+      return;
+    }
     
     const items = event.dataTransfer.items;
     
@@ -89,15 +103,18 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
           onChange={handleFileChange}
           className="sr-only"
           multiple
+          disabled={!isLoaded}
         />
         <label
-          htmlFor="videoFile"
+          htmlFor={isLoaded ? "videoFile" : undefined}
           className={`
             relative flex flex-col items-center justify-center gap-8 p-12 min-h-[280px]
-            border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300
-            ${isDragOver 
-              ? 'border-orange-500 bg-orange-50 shadow-lg' 
-              : 'border-gray-300 bg-gray-50 hover:border-orange-400 hover:bg-orange-50/50'
+            border-2 border-dashed rounded-xl transition-all duration-300
+            ${!isLoaded 
+              ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-75' 
+              : isDragOver 
+                ? 'border-orange-500 bg-orange-50 shadow-lg cursor-pointer' 
+                : 'border-gray-300 bg-gray-50 hover:border-orange-400 hover:bg-orange-50/50 cursor-pointer'
             }
           `}
           onDragOver={handleDragOver}
@@ -124,7 +141,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
             </div>
             
             <div className="text-center">
-              {!isLoaded && currentMethod === 'FFmpeg' ? (
+              {!isLoaded ? (
                 <div className="flex flex-col items-center gap-4">
                   <div className="flex items-center gap-2">
                     <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500"></div>
