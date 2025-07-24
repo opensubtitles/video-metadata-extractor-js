@@ -26,6 +26,13 @@ interface BatchProgress {
 const App: React.FC = () => {
   const { metadata, progress, error, handleFileSelect, hideError, hideProgress, isLoaded, selectedFile, currentMethod, extractSubtitle, extractStream, extractAllSubtitles } = useSmartMetadata();
   
+  // Debug log the extractStream function
+  console.log('[APP DEBUG]', {
+    currentMethod,
+    hasExtractStream: !!extractStream,
+    selectedFile: selectedFile?.name
+  });
+  
   // Auto-scroll to metadata results
   const scrollToResults = () => {
     const resultsElement = document.getElementById('video-metadata-results');
