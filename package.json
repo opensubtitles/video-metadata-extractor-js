@@ -2,16 +2,52 @@
   "name": "video-metadata-extractor",
   "version": "1.0.1",
   "description": "A browser-based video metadata extractor and subtitle extractor that uses FFmpeg WASM to analyze video files, extract comprehensive metadata information, and extract subtitle tracks from MKV/WebM files with memory-safe processing of files of any size using chunked streaming.",
-  "main": "index.html",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "vite --port 5180",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "version:sync": "node scripts/update-version.js",
+    "build:npm": "tsc --project tsconfig.npm.json",
+    "prepare": "npm run build:npm",
+    "prepublishOnly": "npm run version:sync && npm run lint && npm run build:npm"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "video",
+    "metadata",
+    "subtitles",
+    "ffmpeg",
+    "wasm",
+    "extraction",
+    "mkv",
+    "mp4",
+    "browser"
+  ],
+  "author": "OpenSubtitles",
+  "license": "MIT",
+  "homepage": "https://opensubtitles.github.io/video-metadata-extractor-js/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/opensubtitles/video-metadata-extractor-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/opensubtitles/video-metadata-extractor-js/issues"
+  },
   "type": "module",
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.11",
