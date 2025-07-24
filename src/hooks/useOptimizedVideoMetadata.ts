@@ -664,19 +664,15 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       // Clean up before extraction
       await cleanupFFmpegFiles();
       
-      // For stream extraction, use smaller chunks for memory safety
-      const fileSize = file.size;
-      const maxChunkSize = 100 * 1024 * 1024; // 100MB max for stream extraction (reduced for memory safety)
-      const fileData = fileSize <= maxChunkSize ? file : file.slice(0, maxChunkSize);
-      
-      // Write file to FFmpeg virtual filesystem
-      showProgress(`Loading ${streamType} stream into FFmpeg...`, 25);
+      // Use the complete file for stream extraction
+      showProgress(`Loading complete file into FFmpeg...`, 25);
       await new Promise(resolve => setTimeout(resolve, 200));
       
       const inputFileName = `input_${Date.now()}.${file.name.split('.').pop()}`;
-      const outputFileName = `output_${streamType}_${streamIndex}_${Date.now()}.${streamType === 'video' ? 'mp4' : 'aac'}`;
+      const outputFileName = `output_${streamType}_${streamIndex}_${Date.now()}.${streamType === 'video' ? 'mp4' : (streamType === 'audio' ? 'aac' : 'mkv')}`;
       
-      await ffmpegRef.current.writeFile(inputFileName, await fetchFile(fileData));
+      // Load the complete file
+      await ffmpegRef.current.writeFile(inputFileName, await fetchFile(file));
       
       // Extract the specific stream
       showProgress(`Extracting ${streamType} stream ${streamIndex}...`, 50);

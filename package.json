@@ -1,6 +1,6 @@
 {
   "name": "@opensubtitles/video-metadata-extractor",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "A comprehensive NPM package for video metadata extraction and subtitle processing using FFmpeg WASM. Supports metadata extraction, individual subtitle extraction, batch subtitle extraction with ZIP downloads, and memory-safe processing of files of any size using chunked streaming.",
   "main": "dist/lib/index.js",
   "module": "dist/lib/index.esm.js",
