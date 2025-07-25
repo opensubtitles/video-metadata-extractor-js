@@ -149,9 +149,6 @@ const OptimizedApp: React.FC = () => {
       }));
 
       let extractedCount = 0;
-
-      // Track progress during extraction
-      const originalProgressText = batchProgress.text;
       
       // Create a progress tracker that intercepts individual subtitle progress
       const progressTracker = {
