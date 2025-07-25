@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { processDroppedItems, processSelectedFiles } from '../utils/fileUtils';
 import { VERSION } from '../version';
 
@@ -8,10 +8,36 @@ interface FileUploadProps {
   selectedFile?: File | null;
   isLoaded?: boolean;
   currentMethod?: string;
+  saveAllSubtitles?: boolean;
+  onSaveAllSubtitlesChange?: (enabled: boolean) => void;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultipleFilesSelect, isLoaded }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ 
+  onFileSelect, 
+  onMultipleFilesSelect, 
+  isLoaded, 
+  saveAllSubtitles, 
+  onSaveAllSubtitlesChange 
+}) => {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [internalSaveAllSubtitles, setInternalSaveAllSubtitles] = useState(true);
+
+  // Load saved preference from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('saveAllSubtitles');
+    const shouldSave = saved !== null ? JSON.parse(saved) : true;
+    setInternalSaveAllSubtitles(shouldSave);
+    onSaveAllSubtitlesChange?.(shouldSave);
+  }, [onSaveAllSubtitlesChange]);
+
+  // Use external prop if provided, otherwise use internal state
+  const currentSaveAllSubtitles = saveAllSubtitles !== undefined ? saveAllSubtitles : internalSaveAllSubtitles;
+
+  const handleSaveAllSubtitlesChange = (checked: boolean) => {
+    setInternalSaveAllSubtitles(checked);
+    localStorage.setItem('saveAllSubtitles', JSON.stringify(checked));
+    onSaveAllSubtitlesChange?.(checked);
+  };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!isLoaded) {
@@ -22,10 +48,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
     const fileList = event.target.files;
     if (fileList) {
       const videoFiles = processSelectedFiles(fileList);
+      console.log('[FILE UPLOAD DEBUG] Processed files:', videoFiles.length, videoFiles.map(f => f.name));
       
       if (videoFiles.length === 1) {
+        console.log('[FILE UPLOAD DEBUG] Single file - calling onFileSelect');
         onFileSelect(videoFiles[0]);
       } else if (videoFiles.length > 1) {
+        console.log('[FILE UPLOAD DEBUG] Multiple files - calling onMultipleFilesSelect');
         onMultipleFilesSelect(videoFiles);
       }
     }
@@ -68,10 +97,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
     if (items) {
       try {
         const videoFiles = await processDroppedItems(items);
+        console.log('[FILE UPLOAD DEBUG] Processed dropped files:', videoFiles.length, videoFiles.map(f => f.name));
         
         if (videoFiles.length === 1) {
+          console.log('[FILE UPLOAD DEBUG] Single dropped file - calling onFileSelect');
           onFileSelect(videoFiles[0]);
         } else if (videoFiles.length > 1) {
+          console.log('[FILE UPLOAD DEBUG] Multiple dropped files - calling onMultipleFilesSelect');
           onMultipleFilesSelect(videoFiles);
         }
       } catch (error) {
@@ -183,6 +215,26 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, onMultiple
                     <span className="text-gray-400">and other video formats</span>
                   </div>
                   
+                  {/* Save All Subtitles Checkbox */}
+                  <div className="mb-4">
+                    <label className="flex items-center justify-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 border border-gray-200 hover:border-gray-300 transition-all duration-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={currentSaveAllSubtitles}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleSaveAllSubtitlesChange(e.target.checked);
+                        }}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                      />
+                      <div className="text-center">
+                        <span className="text-sm font-medium text-gray-700 block">
+                          Save all subtitles to ZIP
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+
                   {/* OpenSubtitles Branding */}
                   <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
                     <span>Made with</span>

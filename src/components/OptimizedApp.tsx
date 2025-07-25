@@ -2,7 +2,7 @@
  * Optimized App component with simplified batch processing and better state management
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { FileUpload } from './FileUpload';
 import { ProgressBar } from './ProgressBar';
 import { MetadataDisplay } from './MetadataDisplay';
@@ -10,7 +10,6 @@ import { ErrorDisplay } from './ErrorDisplay';
 import { useOptimizedVideoMetadata } from '../hooks/useOptimizedVideoMetadata';
 import { VideoMetadata } from '../types';
 import { formatFileSize, sleep } from '../utils/common';
-import { UI_CONSTANTS } from '../constants';
 
 interface FileProcessingItem {
   file: File;
@@ -46,6 +45,18 @@ const OptimizedApp: React.FC = () => {
     extractAllSubtitles 
   } = useOptimizedVideoMetadata();
 
+  // Refs to access current state values inside callbacks
+  const metadataRef = useRef(metadata);
+  const selectedFileRef = useRef(selectedFile);
+  const progressRef = useRef(progress);
+  
+  // Update refs when state changes
+  useEffect(() => {
+    metadataRef.current = metadata;
+    selectedFileRef.current = selectedFile;
+    progressRef.current = progress;
+  }, [metadata, selectedFile, progress]);
+
   // Debug logging
   console.log('[APP DEBUG] Current state:', {
     isLoaded,
@@ -68,6 +79,10 @@ const OptimizedApp: React.FC = () => {
     text: '',
     progress: 0
   });
+  
+  const [saveAllSubtitles, setSaveAllSubtitles] = useState(true);
+  const [batchSubtitleExtractionTriggered, setBatchSubtitleExtractionTriggered] = useState(false);
+  const [batchSubtitleExtractionCancelled, setBatchSubtitleExtractionCancelled] = useState(false);
 
   // Single file selection handler
   const onFileSelect = useCallback((file: File) => {
@@ -79,15 +94,206 @@ const OptimizedApp: React.FC = () => {
     setProcessingQueue([]);
     setCurrentlyProcessing(null);
     setBatchProgress(prev => ({ ...prev, isVisible: false }));
+    setBatchSubtitleExtractionTriggered(false);
+    setBatchSubtitleExtractionCancelled(false);
     
     // Process single file immediately
     console.log('[APP DEBUG] Calling handleFileSelect...');
     handleFileSelect(file);
   }, [handleFileSelect, isLoaded]);
 
+  // Handle batch subtitle extraction for all MKV files
+  const handleBatchSubtitleExtraction = useCallback(async (items: FileProcessingItem[]) => {
+    console.log('[BATCH SUBTITLE DEBUG] Starting batch subtitle extraction with items:', items.length);
+    
+    const mkvFiles = items.filter(item => 
+      item.completed && 
+      item.metadata && 
+      (item.file.name.toLowerCase().endsWith('.mkv') || item.file.name.toLowerCase().endsWith('.webm'))
+    );
+
+    console.log('[BATCH SUBTITLE DEBUG] MKV files found:', {
+      total: mkvFiles.length,
+      files: mkvFiles.map(item => ({
+        name: item.file.name,
+        completed: item.completed,
+        hasMetadata: !!item.metadata,
+        subtitleCount: item.metadata?.streams?.filter(s => s.codec_type === 'subtitle').length || 0
+      }))
+    });
+
+    if (mkvFiles.length === 0) {
+      console.log('[BATCH SUBTITLE DEBUG] No MKV files found, hiding progress');
+      setBatchProgress(prev => ({ ...prev, isVisible: false }));
+      return;
+    }
+
+    try {
+      // Clear any existing errors and progress before starting
+      hideError();
+      hideProgress();
+      
+      // Calculate total subtitles across all files for smooth progress
+      const totalSubtitles = mkvFiles.reduce((total, item) => {
+        const subtitleCount = item.metadata?.streams?.filter(s => s.codec_type === 'subtitle').length || 0;
+        return total + subtitleCount;
+      }, 0);
+
+      console.log('[BATCH SUBTITLE DEBUG] Total subtitles to extract:', totalSubtitles);
+
+      setBatchProgress(prev => ({
+        ...prev,
+        isVisible: true,
+        text: `Extracting ${totalSubtitles} subtitles from ${mkvFiles.length} files...`,
+        progress: 0
+      }));
+
+      let extractedCount = 0;
+
+      // Track progress during extraction
+      const originalProgressText = batchProgress.text;
+      
+      // Create a progress tracker that intercepts individual subtitle progress
+      const progressTracker = {
+        currentFileIndex: 0,
+        currentFile: null as FileProcessingItem | null,
+        fileSubtitleCount: 0,
+        fileExtractedCount: 0
+      };
+
+      // Extract subtitles from each MKV file
+      for (let fileIndex = 0; fileIndex < mkvFiles.length; fileIndex++) {
+        const item = mkvFiles[fileIndex];
+        const subtitleStreams = item.metadata?.streams?.filter(s => s.codec_type === 'subtitle') || [];
+        
+        console.log(`[BATCH SUBTITLE DEBUG] Processing file ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name} (${subtitleStreams.length} subtitles)`);
+        
+        // Update tracker
+        progressTracker.currentFileIndex = fileIndex;
+        progressTracker.currentFile = item;
+        progressTracker.fileSubtitleCount = subtitleStreams.length;
+        progressTracker.fileExtractedCount = 0;
+
+        setBatchProgress(prev => ({
+          ...prev,
+          text: `File ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name} - Starting...`,
+          progress: Math.round((extractedCount / totalSubtitles) * 100)
+        }));
+
+        try {
+          // Create a progress monitoring interval to track individual subtitle extraction
+          let progressInterval: NodeJS.Timeout | null = null;
+          
+          // Monitor the hook's progress to update batch progress in real-time
+          const startMonitoring = () => {
+            progressInterval = setInterval(() => {
+              const currentProgress = progressRef.current;
+              // If we can detect individual subtitle progress from the hook, update batch progress
+              if (currentProgress.isVisible && currentProgress.text.includes('Extracting subtitle')) {
+                const match = currentProgress.text.match(/Extracting subtitle (\d+)\/(\d+)/);
+                if (match) {
+                  const currentSub = parseInt(match[1]);
+                  const totalSubs = parseInt(match[2]);
+                  
+                  // Calculate overall progress including this file's progress
+                  const fileProgress = (currentSub / totalSubs) * subtitleStreams.length;
+                  const overallProgress = extractedCount + fileProgress;
+                  
+                  setBatchProgress(prev => ({
+                    ...prev,
+                    text: `File ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name} - Subtitle ${currentSub}/${totalSubs}`,
+                    progress: Math.round((overallProgress / totalSubtitles) * 100)
+                  }));
+                }
+              }
+            }, 200); // Update every 200ms
+          };
+
+          const stopMonitoring = () => {
+            if (progressInterval) {
+              clearInterval(progressInterval);
+              progressInterval = null;
+            }
+          };
+
+          // Start monitoring
+          startMonitoring();
+          
+          // Continuously hide individual progress during extraction
+          const suppressProgressInterval = setInterval(() => {
+            if (progressRef.current.isVisible) {
+              hideProgress();
+            }
+          }, 100);
+          
+          try {
+            // Extract all subtitles from this file
+            await extractAllSubtitles(item.file);
+          } finally {
+            // Clean up progress suppression
+            clearInterval(suppressProgressInterval);
+          }
+          
+          // Stop monitoring
+          stopMonitoring();
+          
+          // Clear any errors that might have occurred during extraction
+          hideError();
+          
+          // Update progress for all subtitles in this file
+          extractedCount += subtitleStreams.length;
+          
+          setBatchProgress(prev => ({
+            ...prev,
+            text: `File ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name} - Completed (${subtitleStreams.length} subtitles)`,
+            progress: Math.round((extractedCount / totalSubtitles) * 100)
+          }));
+          
+          // Small delay between files
+          if (fileIndex < mkvFiles.length - 1) {
+            await sleep(1000);
+          }
+        } catch (error) {
+          console.error(`Failed to extract subtitles from ${item.file.name}:`, error);
+          // Still count the subtitles as "processed" to keep progress moving
+          extractedCount += subtitleStreams.length;
+          
+          setBatchProgress(prev => ({
+            ...prev,
+            text: `File ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name} - Failed, continuing...`,
+            progress: Math.round((extractedCount / totalSubtitles) * 100)
+          }));
+        }
+      }
+
+      setBatchProgress(prev => ({
+        ...prev,
+        text: `Batch extraction completed! ${totalSubtitles} subtitles from ${mkvFiles.length} files`,
+        progress: 100
+      }));
+
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        setBatchProgress(prev => ({ ...prev, isVisible: false }));
+      }, 5000);
+
+    } catch (error) {
+      console.error('Batch subtitle extraction failed:', error);
+      setBatchProgress(prev => ({
+        ...prev,
+        text: 'Batch subtitle extraction failed',
+        progress: 100
+      }));
+      
+      setTimeout(() => {
+        setBatchProgress(prev => ({ ...prev, isVisible: false }));
+      }, 3000);
+    }
+  }, [extractAllSubtitles, hideError, hideProgress]);
+
   // Multiple files selection handler
   const onMultipleFilesSelect = useCallback((files: File[]) => {
-    console.log(`Starting batch processing with ${files.length} files`);
+    console.log(`[BATCH DEBUG] Starting batch processing with ${files.length} files:`, files.map(f => f.name));
     
     // Initialize file list
     const initialItems: FileProcessingItem[] = files.map(file => ({
@@ -101,6 +307,8 @@ const OptimizedApp: React.FC = () => {
     
     setFileList(initialItems);
     setProcessingQueue([...files]);
+    setBatchSubtitleExtractionTriggered(false);
+    setBatchSubtitleExtractionCancelled(false);
     setBatchProgress({
       isVisible: true,
       currentFile: 0,
@@ -120,16 +328,22 @@ const OptimizedApp: React.FC = () => {
     items: FileProcessingItem[]
   ) => {
     if (queue.length === 0) {
+      // Clear processing states
+      setProcessingQueue([]);
+      setCurrentlyProcessing(null);
+      
       setBatchProgress(prev => ({
         ...prev,
         text: 'All files processed!',
         progress: 100
       }));
       
-      // Auto-hide progress bar after 3 seconds
-      setTimeout(() => {
-        setBatchProgress(prev => ({ ...prev, isVisible: false }));
-      }, 3000);
+      // Auto-hide progress bar after 3 seconds if not extracting subtitles
+      if (!saveAllSubtitles) {
+        setTimeout(() => {
+          setBatchProgress(prev => ({ ...prev, isVisible: false }));
+        }, 3000);
+      }
       
       return;
     }
@@ -144,11 +358,20 @@ const OptimizedApp: React.FC = () => {
     const progressPerFile = 100 / items.length;
     const baseProgress = (currentIndex - 1) * progressPerFile;
     
+    console.log('[BATCH PROGRESS DEBUG] Starting file:', {
+      fileName: currentFile.name,
+      currentIndex,
+      totalFiles: items.length,
+      progressPerFile,
+      baseProgress: Math.round(baseProgress),
+      previousProgress: 'N/A (from setBatchProgress)'
+    });
+    
     setBatchProgress(prev => ({
       ...prev,
       currentFile: currentIndex,
       fileName: currentFile.name,
-      text: `Processing ${currentIndex}/${items.length}: ${currentFile.name}`,
+      text: `File ${currentIndex}/${items.length}: Starting ${currentFile.name}`,
       progress: Math.round(baseProgress)
     }));
 
@@ -160,24 +383,42 @@ const OptimizedApp: React.FC = () => {
     ));
 
     try {
-      // Process the current file
+      console.log('[BATCH PROCESSING DEBUG] Before processing:', {
+        fileName: currentFile.name
+      });
+      
+      // Process the current file and capture metadata immediately after completion
       await handleFileSelect(currentFile);
       
-      // Wait for metadata to be available
-      let attempts = 0;
-      const maxAttempts = 50; // 10 seconds total
+      // Small delay to let React state settle
+      await sleep(100);
       
-      while (attempts < maxAttempts) {
-        await sleep(200);
-        attempts++;
-        
-        // Check if we have metadata for this file
-        // Note: In a real implementation, you'd need to pass the metadata back
-        // This is a simplified version
-        break;
+      // Capture metadata if it's available and matches our file
+      let capturedMetadata = null;
+      const currentMetadata = metadataRef.current;
+      const currentSelectedFile = selectedFileRef.current;
+      
+      if (currentMetadata && currentSelectedFile?.name === currentFile.name) {
+        capturedMetadata = JSON.parse(JSON.stringify(currentMetadata));
+        console.log('[BATCH PROCESSING DEBUG] Metadata captured for:', currentFile.name);
+      } else {
+        console.log('[BATCH PROCESSING DEBUG] No metadata captured for:', currentFile.name, {
+          hasMetadata: !!currentMetadata,
+          selectedFileName: currentSelectedFile?.name,
+          expectedFileName: currentFile.name
+        });
       }
 
       // Update file list with success
+      console.log('[BATCH PROCESSING DEBUG] File completed:', {
+        fileName: currentFile.name,
+        hasMetadata: !!capturedMetadata,
+        metadataPreview: capturedMetadata ? {
+          format: capturedMetadata.format?.filename,
+          streamsCount: capturedMetadata.streams?.length
+        } : null
+      });
+      
       setFileList(prev => prev.map(item => 
         item.file === currentFile 
           ? { 
@@ -185,7 +426,7 @@ const OptimizedApp: React.FC = () => {
               isProcessing: false, 
               completed: true,
               method: 'Optimized Processing',
-              metadata: metadata // Note: This might not be the correct metadata for batch processing
+              metadata: capturedMetadata
             }
           : item
       ));
@@ -208,18 +449,23 @@ const OptimizedApp: React.FC = () => {
 
     setCurrentlyProcessing(null);
     
-    // Add delay between files for cleanup
-    await sleep(UI_CONSTANTS.DELAYS.CLEANUP_DISPLAY);
+    // Update processing queue to reflect completed file
+    setProcessingQueue(remainingQueue);
+    
+    // Add longer delay between files to ensure metadata capture
+    await sleep(1000); // 1 second delay between files
     
     // Process next file
     processBatchQueue(remainingQueue, items);
-  }, [handleFileSelect, metadata]);
+  }, [handleFileSelect, saveAllSubtitles]);
 
   // Clear all processing
   const onClearAll = useCallback(() => {
     setFileList([]);
     setProcessingQueue([]);
     setCurrentlyProcessing(null);
+    setBatchSubtitleExtractionTriggered(false);
+    setBatchSubtitleExtractionCancelled(false);
     setBatchProgress({
       isVisible: false,
       currentFile: 0,
@@ -230,9 +476,37 @@ const OptimizedApp: React.FC = () => {
     });
   }, []);
 
+  // Track when batch processing is complete and trigger subtitle extraction
+  useEffect(() => {
+    console.log('[BATCH DEBUG] useEffect triggered with:', {
+      fileListLength: fileList.length,
+      allCompleted: fileList.every(item => item.completed),
+      saveAllSubtitles,
+      batchSubtitleExtractionTriggered,
+      processingQueueLength: processingQueue.length,
+      fileList: fileList.map(item => ({ name: item.file.name, completed: item.completed, hasMetadata: !!item.metadata }))
+    });
+    
+    // Check if all files are completed and we haven't triggered subtitle extraction yet
+    if (fileList.length > 0 && 
+        fileList.every(item => item.completed) && 
+        saveAllSubtitles && 
+        !batchSubtitleExtractionTriggered &&
+        !batchSubtitleExtractionCancelled &&
+        processingQueue.length === 0) {
+      
+      console.log('[BATCH DEBUG] All files completed, triggering subtitle extraction');
+      setBatchSubtitleExtractionTriggered(true);
+      
+      setTimeout(async () => {
+        await handleBatchSubtitleExtraction(fileList);
+      }, 1000);
+    }
+  }, [fileList, saveAllSubtitles, batchSubtitleExtractionTriggered, batchSubtitleExtractionCancelled, processingQueue.length, handleBatchSubtitleExtraction]);
+
   // Update batch progress when individual file progress changes
   useEffect(() => {
-    if (currentlyProcessing && batchProgress.isVisible && processingQueue.length > 0) {
+    if (currentlyProcessing && batchProgress.isVisible && processingQueue.length > 0 && progress.isVisible) {
       const currentIndex = batchProgress.currentFile;
       const totalFiles = batchProgress.totalFiles;
       
@@ -244,13 +518,26 @@ const OptimizedApp: React.FC = () => {
       const fileProgressContribution = (progress.progress / 100) * progressPerFile;
       const overallProgress = fileStartProgress + fileProgressContribution;
       
+      console.log('[BATCH PROGRESS DEBUG] Progress calculation:', {
+        fileName: currentlyProcessing.name,
+        currentIndex,
+        totalFiles,
+        individualProgress: progress.progress,
+        progressPerFile,
+        fileStartProgress,
+        fileProgressContribution,
+        overallProgress: Math.round(Math.min(overallProgress, 100)),
+        previousProgress: batchProgress.progress,
+        progressVisible: progress.isVisible
+      });
+      
       setBatchProgress(prev => ({
         ...prev,
         progress: Math.round(Math.min(overallProgress, 100)),
-        text: progress.text || prev.text
+        text: `File ${currentIndex}/${totalFiles}: ${progress.text || 'Processing...'}`
       }));
     }
-  }, [progress.progress, progress.text, currentlyProcessing, batchProgress.isVisible, batchProgress.currentFile, batchProgress.totalFiles, processingQueue.length]);
+  }, [progress.progress, progress.text, progress.isVisible, currentlyProcessing, batchProgress.isVisible, batchProgress.currentFile, batchProgress.totalFiles, processingQueue.length]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
@@ -270,8 +557,76 @@ const OptimizedApp: React.FC = () => {
           onFileSelect={onFileSelect} 
           onMultipleFilesSelect={onMultipleFilesSelect} 
           isLoaded={isLoaded} 
-          currentMethod={currentMethod} 
+          currentMethod={currentMethod}
+          saveAllSubtitles={saveAllSubtitles}
+          onSaveAllSubtitlesChange={setSaveAllSubtitles}
         />
+
+        {/* File Navigation Bar */}
+        {((fileList.length > 0 && fileList.some(item => item.completed)) || (metadata && selectedFile)) && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-600 mb-3">Quick Navigation:</h3>
+            <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Single file mode */}
+                {fileList.length === 0 && metadata && selectedFile && (
+                  <button
+                    onClick={() => {
+                      const element = document.getElementById('single-file-result');
+                      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm rounded-full transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                    </svg>
+                    {selectedFile.name}
+                  </button>
+                )}
+                
+                {/* Multiple files mode */}
+                {fileList.length > 0 && fileList.map((item, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      const element = document.getElementById(`file-result-${index}`);
+                      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    className={`inline-flex items-center gap-1 px-3 py-1 text-sm rounded-full transition-colors ${
+                      item.completed && item.metadata
+                        ? 'bg-green-100 hover:bg-green-200 text-green-800'
+                        : item.error
+                        ? 'bg-red-100 hover:bg-red-200 text-red-800'
+                        : item.isProcessing
+                        ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                    }`}
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                    </svg>
+                    <span className="whitespace-nowrap">{item.file.name}</span>
+                    {item.completed && item.metadata && (
+                      <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    {item.error && (
+                      <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                    {item.isProcessing && (
+                      <div className="w-3 h-3 ml-1">
+                        <div className="animate-spin rounded-full h-3 w-3 border-b border-current"></div>
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Processing Status */}
         {(processingQueue.length > 0 || currentlyProcessing) && (
@@ -300,19 +655,23 @@ const OptimizedApp: React.FC = () => {
         )}
         
         {/* Batch Progress */}
-        {batchProgress.isVisible && batchProgress.totalFiles > 1 && (
+        {((batchProgress.isVisible && batchProgress.totalFiles > 1) || batchSubtitleExtractionTriggered) && (
           <ProgressBar 
             progress={{
               isVisible: true,
               progress: batchProgress.progress,
               text: batchProgress.text
             }} 
-            onClose={batchProgress.progress === 100 ? () => setBatchProgress(prev => ({ ...prev, isVisible: false })) : undefined} 
+            onClose={() => {
+              setBatchProgress(prev => ({ ...prev, isVisible: false }));
+              setBatchSubtitleExtractionTriggered(false);
+              setBatchSubtitleExtractionCancelled(true);
+            }} 
           />
         )}
         
-        {/* Individual File Progress */}
-        {batchProgress.totalFiles <= 1 && progress.isVisible && (
+        {/* Individual File Progress - Show for single file mode OR when batch is complete and individual extraction is happening */}
+        {progress.isVisible && (fileList.length === 0 || (fileList.length > 0 && !batchProgress.isVisible && processingQueue.length === 0)) && (
           <ProgressBar 
             progress={progress} 
             onClose={hideProgress} 
@@ -333,12 +692,26 @@ const OptimizedApp: React.FC = () => {
               </h2>
               <p className="text-gray-600">
                 {fileList.filter(item => item.completed).length} of {fileList.length} files processed
+                {saveAllSubtitles && fileList.some(item => item.completed && (item.file.name.toLowerCase().endsWith('.mkv') || item.file.name.toLowerCase().endsWith('.webm'))) && (
+                  <span className="ml-2 inline-flex items-center gap-1 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                      <path d="M10,19L12,21L16,17"/>
+                    </svg>
+                    Auto-extracting subtitles
+                  </span>
+                )}
               </p>
             </div>
             
             <div className="grid gap-4">
-              {fileList.map((item, index) => (
-                <div key={index} className="border-2 border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+              {fileList.map((item, index) => {
+                // Alternating background colors for better visual separation
+                const bgColor = index % 2 === 0 ? 'bg-blue-50' : 'bg-green-50';
+                const borderColor = index % 2 === 0 ? 'border-blue-200' : 'border-green-200';
+                
+                return (
+                <div key={index} id={`file-result-${index}`} className={`border-2 ${borderColor} rounded-lg p-4 ${bgColor} shadow-sm scroll-mt-6`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-lg font-semibold text-gray-800 truncate">
@@ -389,14 +762,15 @@ const OptimizedApp: React.FC = () => {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
         
         {/* Single File Result */}
         {fileList.length === 0 && metadata && selectedFile && (
-          <div className="bg-white rounded-lg shadow-lg p-6">
+          <div id="single-file-result" className="bg-white rounded-lg shadow-lg p-6 scroll-mt-6">
             <MetadataDisplay 
               metadata={metadata} 
               selectedFile={selectedFile} 
@@ -410,7 +784,25 @@ const OptimizedApp: React.FC = () => {
         {/* Footer */}
         <footer className="text-center text-gray-500 text-sm mt-12 pt-8 border-t border-gray-200">
           <p>
-            Powered by FFmpeg WebAssembly • 
+            Powered by{' '}
+            <a 
+              href="https://github.com/ffmpegwasm/ffmpeg.wasm" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              FFmpeg WebAssembly
+            </a>
+            {' '}and{' '}
+            <a 
+              href="https://github.com/gpac/mp4box.js" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              MP4Box
+            </a>
+            {' '}•{' '}
             Supports files of any size with memory-safe processing • 
             All processing happens in your browser
           </p>
