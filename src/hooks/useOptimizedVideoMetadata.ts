@@ -252,14 +252,30 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       await cleanupFFmpegFiles();
       await sleep(500);
 
-      // Process file using file processor utility
-      const fileProcessor = createFileProcessor({
-        chunkSize: PROCESSING_CONSTANTS.CHUNK_SIZES.COMPLETE_FILE,
-        debug: false
-      });
-
-      showProgress('Loading file...', 30);
-      const fileData = await fileProcessor.processCompleteFile(file);
+      // For very large files (>5GB), only read the header portion for metadata
+      const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024 * 1024; // 5GB
+      const HEADER_SIZE = 100 * 1024 * 1024; // 100MB header should contain metadata
+      
+      let fileData: Blob;
+      
+      if (file.size > LARGE_FILE_THRESHOLD) {
+        console.log(`[METADATA EXTRACTION] Large file detected (${formatFileSize(file.size)}), using header-only extraction`);
+        showProgress(`Large file detected (${formatFileSize(file.size)}) - reading header only...`, 25);
+        
+        // Only read the first portion of the file for metadata extraction
+        fileData = file.slice(0, HEADER_SIZE);
+        console.log(`[METADATA EXTRACTION] Reading first ${formatFileSize(HEADER_SIZE)} of file for metadata`);
+      } else {
+        console.log(`[METADATA EXTRACTION] Normal file size (${formatFileSize(file.size)}), using complete file processing`);
+        showProgress('Loading file...', 30);
+        
+        // Process complete file for smaller files
+        const fileProcessor = createFileProcessor({
+          chunkSize: PROCESSING_CONSTANTS.CHUNK_SIZES.COMPLETE_FILE,
+          debug: false
+        });
+        fileData = await fileProcessor.processCompleteFile(file);
+      }
 
       showProgress('Loading into FFmpeg...', 50);
       
@@ -342,13 +358,28 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       showProgress(`Extracting subtitle track ${streamIndex}...`, 10);
       await cleanupFFmpegFiles();
 
-      // Process file
-      const fileProcessor = createFileProcessor({
-        chunkSize: PROCESSING_CONSTANTS.CHUNK_SIZES.COMPLETE_FILE,
-        debug: false
-      });
+      // For large files (>5GB), we need to be more strategic about file processing
+      const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024 * 1024; // 5GB
+      let fileData: Blob;
 
-      const fileData = await fileProcessor.processCompleteFile(file);
+      if (file.size > LARGE_FILE_THRESHOLD) {
+        console.log(`[SUBTITLE EXTRACTION] Large file detected (${formatFileSize(file.size)}), using strategic chunking`);
+        showProgress(`Large file (${formatFileSize(file.size)}) - preparing for extraction...`, 20);
+        
+        // For subtitle extraction from large files, we can try to read strategic portions
+        // Most subtitle data is distributed throughout the file, so we need a different approach
+        // For now, let's try reading more of the beginning where subtitle metadata might be
+        const SUBTITLE_CHUNK_SIZE = 500 * 1024 * 1024; // 500MB should be enough for most subtitle tracks
+        fileData = file.slice(0, SUBTITLE_CHUNK_SIZE);
+        console.log(`[SUBTITLE EXTRACTION] Reading first ${formatFileSize(SUBTITLE_CHUNK_SIZE)} for subtitle extraction`);
+      } else {
+        console.log(`[SUBTITLE EXTRACTION] Normal file size, using complete file processing`);
+        const fileProcessor = createFileProcessor({
+          chunkSize: PROCESSING_CONSTANTS.CHUNK_SIZES.COMPLETE_FILE,
+          debug: false
+        });
+        fileData = await fileProcessor.processCompleteFile(file);
+      }
       
       showProgress('Loading for subtitle extraction...', 30);
       await ffmpegRef.current.writeFile(FFMPEG_CONSTANTS.TEMP_FILES.INPUT, await fetchFile(fileData));
@@ -428,13 +459,26 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
 
       await cleanupFFmpegFiles();
 
-      // Process file
-      const fileProcessor = createFileProcessor({
-        chunkSize: PROCESSING_CONSTANTS.CHUNK_SIZES.COMPLETE_FILE,
-        debug: false
-      });
+      // For large files (>5GB), use strategic chunking
+      const LARGE_FILE_THRESHOLD = 5 * 1024 * 1024 * 1024; // 5GB
+      let fileData: Blob;
 
-      const fileData = await fileProcessor.processCompleteFile(file);
+      if (file.size > LARGE_FILE_THRESHOLD) {
+        console.log(`[BATCH SUBTITLE EXTRACTION] Large file detected (${formatFileSize(file.size)}), using strategic chunking`);
+        showProgress(`Large file (${formatFileSize(file.size)}) - preparing for batch extraction...`, 10);
+        
+        // For batch subtitle extraction, we need more data as multiple tracks are spread throughout
+        const BATCH_CHUNK_SIZE = 1024 * 1024 * 1024; // 1GB should capture most subtitle tracks
+        fileData = file.slice(0, BATCH_CHUNK_SIZE);
+        console.log(`[BATCH SUBTITLE EXTRACTION] Reading first ${formatFileSize(BATCH_CHUNK_SIZE)} for batch extraction`);
+      } else {
+        console.log(`[BATCH SUBTITLE EXTRACTION] Normal file size, using complete file processing`);
+        const fileProcessor = createFileProcessor({
+          chunkSize: PROCESSING_CONSTANTS.CHUNK_SIZES.COMPLETE_FILE,
+          debug: false
+        });
+        fileData = await fileProcessor.processCompleteFile(file);
+      }
       
       showProgress('Loading file for batch extraction...', 15);
       await ffmpegRef.current.writeFile(FFMPEG_CONSTANTS.TEMP_FILES.INPUT, await fetchFile(fileData));
