@@ -2,19 +2,8 @@
 
 [![Deploy to GitHub Pages](https://github.com/opensubtitles/video-metadata-extractor-js/actions/workflows/deploy.yml/badge.svg)](https://github.com/opensubtitles/video-metadata-extractor-js/actions/workflows/deploy.yml)
 [![npm version](https://badge.fury.io/js/@opensubtitles%2Fvideo-metadata-extractor.svg)](https://www.npmjs.com/package/@opensubtitles/video-metadata-extractor)
-[![npm downloads](https://img.shields.io/npm/dm/@opensubtitles/video-metadata-extractor.svg)](https://www.npmjs.com/package/@opensubtitles/video-metadata-extractor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![GitHub stars](https://img.shields.io/github/stars/opensubtitles/video-metadata-extractor-js?style=social)](https://github.com/opensubtitles/video-metadata-extractor-js/stargazers)
-[![GitHub issues](https://img.shields.io/github/issues/opensubtitles/video-metadata-extractor-js)](https://github.com/opensubtitles/video-metadata-extractor-js/issues)
-[![GitHub last commit](https://img.shields.io/github/last-commit/opensubtitles/video-metadata-extractor-js)](https://github.com/opensubtitles/video-metadata-extractor-js/commits/master)
-
 [![TypeScript](https://img.shields.io/badge/%3C%2F%3E-TypeScript-%230074c1.svg)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-%2320232a.svg?logo=react&logoColor=%2361DAFB)](https://reactjs.org/)
-[![Vite](https://img.shields.io/badge/Vite-%23646CFF.svg?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![FFmpeg](https://img.shields.io/badge/FFmpeg-WASM-green.svg)](https://ffmpegwasm.netlify.app/)
-[![WebAssembly](https://img.shields.io/badge/WebAssembly-654FF0?logo=webassembly&logoColor=white)](https://webassembly.org/)
-[![Code Size](https://img.shields.io/github/languages/code-size/opensubtitles/video-metadata-extractor-js)](https://github.com/opensubtitles/video-metadata-extractor-js)
-[![Browser Support](https://img.shields.io/badge/browsers-Chrome%2057%2B%20%7C%20Firefox%2052%2B%20%7C%20Safari%2011%2B%20%7C%20Edge%2079%2B-brightgreen)](https://caniuse.com/wasm)
 
 A powerful, browser-based video metadata extractor that works with any video file format. Built with React, TypeScript, and intelligent processing engines.
 
