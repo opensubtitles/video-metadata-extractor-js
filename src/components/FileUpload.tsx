@@ -50,11 +50,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       const videoFiles = processSelectedFiles(fileList);
       console.log('[FILE UPLOAD DEBUG] Processed files:', videoFiles.length, videoFiles.map(f => f.name));
       
-      if (videoFiles.length === 1) {
-        console.log('[FILE UPLOAD DEBUG] Single file - calling onFileSelect');
-        onFileSelect(videoFiles[0]);
-      } else if (videoFiles.length > 1) {
-        console.log('[FILE UPLOAD DEBUG] Multiple files - calling onMultipleFilesSelect');
+      if (videoFiles.length >= 1) {
+        console.log(`[FILE UPLOAD DEBUG] Processing ${videoFiles.length} file(s) - using unified batch processing`);
         onMultipleFilesSelect(videoFiles);
       }
     }
@@ -99,11 +96,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         const videoFiles = await processDroppedItems(items);
         console.log('[FILE UPLOAD DEBUG] Processed dropped files:', videoFiles.length, videoFiles.map(f => f.name));
         
-        if (videoFiles.length === 1) {
-          console.log('[FILE UPLOAD DEBUG] Single dropped file - calling onFileSelect');
-          onFileSelect(videoFiles[0]);
-        } else if (videoFiles.length > 1) {
-          console.log('[FILE UPLOAD DEBUG] Multiple dropped files - calling onMultipleFilesSelect');
+        if (videoFiles.length >= 1) {
+          console.log(`[FILE UPLOAD DEBUG] Processing ${videoFiles.length} dropped file(s) - using unified batch processing`);
           onMultipleFilesSelect(videoFiles);
         }
       } catch (error) {

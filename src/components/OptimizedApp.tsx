@@ -42,7 +42,7 @@ const OptimizedApp: React.FC = () => {
     currentMethod, 
     extractSubtitle, 
     extractStream,
-    extractAllSubtitles 
+    extractAllSubtitles
   } = useOptimizedVideoMetadata();
 
   // Refs to access current state values inside callbacks
@@ -473,6 +473,7 @@ const OptimizedApp: React.FC = () => {
     });
   }, []);
 
+
   // Track when batch processing is complete and trigger subtitle extraction
   useEffect(() => {
     console.log('[BATCH DEBUG] useEffect triggered with:', {
@@ -559,37 +560,22 @@ const OptimizedApp: React.FC = () => {
           onSaveAllSubtitlesChange={setSaveAllSubtitles}
         />
 
+
         {/* File Navigation Bar */}
-        {((fileList.length > 0 && fileList.some(item => item.completed)) || (metadata && selectedFile)) && (
+        {fileList.length > 0 && fileList.some(item => item.completed) && (
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-600 mb-3">Quick Navigation:</h3>
             <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Single file mode */}
-                {fileList.length === 0 && metadata && selectedFile && (
-                  <button
-                    onClick={() => {
-                      const element = document.getElementById('single-file-result');
-                      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-800 text-sm rounded-full transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-                    </svg>
-                    {selectedFile.name}
-                  </button>
-                )}
-                
-                {/* Multiple files mode */}
-                {fileList.length > 0 && fileList.map((item, index) => (
+              <div className="grid gap-2">
+                {/* Unified file navigation */}
+                {fileList.map((item, index) => (
                   <button
                     key={index}
                     onClick={() => {
                       const element = document.getElementById(`file-result-${index}`);
                       element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }}
-                    className={`inline-flex items-center gap-1 px-3 py-1 text-sm rounded-full transition-colors ${
+                    className={`flex items-center gap-1 px-3 py-1 text-sm rounded-full transition-colors w-full justify-start ${
                       item.completed && item.metadata
                         ? 'bg-green-100 hover:bg-green-200 text-green-800'
                         : item.error
@@ -685,10 +671,13 @@ const OptimizedApp: React.FC = () => {
           <div className="space-y-6 mb-8">
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                Batch Processing Results
+                {fileList.length === 1 ? 'Processing Results' : 'Batch Processing Results'}
               </h2>
               <p className="text-gray-600">
-                {fileList.filter(item => item.completed).length} of {fileList.length} files processed
+                {fileList.length === 1 
+                  ? `File processed: ${fileList[0]?.file.name || 'Unknown'}`
+                  : `${fileList.filter(item => item.completed).length} of ${fileList.length} files processed`
+                }
                 {saveAllSubtitles && fileList.some(item => item.completed && (item.file.name.toLowerCase().endsWith('.mkv') || item.file.name.toLowerCase().endsWith('.webm'))) && (
                   <span className="ml-2 inline-flex items-center gap-1 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
@@ -751,6 +740,7 @@ const OptimizedApp: React.FC = () => {
                     />
                   )}
                   
+                  
                   {item.error && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
                       <p className="text-red-800 text-sm">
@@ -765,18 +755,7 @@ const OptimizedApp: React.FC = () => {
           </div>
         )}
         
-        {/* Single File Result */}
-        {fileList.length === 0 && metadata && selectedFile && (
-          <div id="single-file-result" className="bg-white rounded-lg shadow-lg p-6 scroll-mt-6">
-            <MetadataDisplay 
-              metadata={metadata} 
-              selectedFile={selectedFile} 
-              extractSubtitle={extractSubtitle} 
-              extractStream={extractStream}
-              extractAllSubtitles={extractAllSubtitles} 
-            />
-          </div>
-        )}
+        
         
         {/* Footer */}
         <footer className="text-center text-gray-500 text-sm mt-12 pt-8 border-t border-gray-200">
@@ -790,7 +769,7 @@ const OptimizedApp: React.FC = () => {
             >
               FFmpeg WebAssembly
             </a>
-            {' '}and{' '}
+            {', '}
             <a 
               href="https://github.com/gpac/mp4box.js" 
               target="_blank" 

@@ -15,7 +15,9 @@ export const PROCESSING_CONSTANTS = {
     /** Download chunk size: 100MB */
     DOWNLOAD: 100 * 1024 * 1024,
     /** Small file threshold: 32MB */
-    SMALL_FILE_THRESHOLD: 32 * 1024 * 1024
+    SMALL_FILE_THRESHOLD: 32 * 1024 * 1024,
+    /** MKV metadata extraction chunk size: 10MB */
+    MKV_METADATA_CHUNK: 10 * 1024 * 1024
   },
 
   /**

@@ -10,18 +10,21 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, onClose }) =
   if (!progress.isVisible) return null;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    // Only close if clicking on the backdrop (not the modal content)
-    if (e.target === e.currentTarget && onClose) {
+    // Only close if clicking on the backdrop (not the modal content) AND processing is complete
+    if (e.target === e.currentTarget && onClose && progress.progress === 100) {
       onClose();
     }
+    // During processing (progress < 100), ignore backdrop clicks
   };
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      className={`fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 ${
+        progress.progress < 100 ? 'cursor-default' : 'cursor-pointer'
+      }`}
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-lg p-6 m-4 max-w-md w-full shadow-2xl">
+      <div className="bg-white rounded-lg p-6 m-4 max-w-md w-full shadow-2xl relative">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-gray-800">
             {progress.progress === 100 ? 'Complete!' : 'Processing...'}

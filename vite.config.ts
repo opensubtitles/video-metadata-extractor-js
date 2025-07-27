@@ -5,8 +5,17 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/video-metadata-extractor-js/',
+  define: {
+    global: 'globalThis',
+  },
   optimizeDeps: {
-    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util']
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+    include: ['buffer']
+  },
+  resolve: {
+    alias: {
+      buffer: 'buffer',
+    },
   },
   server: {
     headers: {
