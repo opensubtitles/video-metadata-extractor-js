@@ -104,13 +104,25 @@ const OptimizedApp: React.FC = () => {
 
   // Handle batch subtitle extraction for all MKV files
   const handleBatchSubtitleExtraction = useCallback(async (items: FileProcessingItem[]) => {
-    console.log('[BATCH SUBTITLE DEBUG] Starting batch subtitle extraction with items:', items.length);
+    console.log('[BATCH SUBTITLE DEBUG] *** FUNCTION ENTRY *** Starting batch subtitle extraction with items:', items.length);
     
     const mkvFiles = items.filter(item => 
       item.completed && 
       item.metadata && 
       (item.file.name.toLowerCase().endsWith('.mkv') || item.file.name.toLowerCase().endsWith('.webm'))
     );
+
+    console.log('[BATCH SUBTITLE DEBUG] File filtering results:', {
+      totalItems: items.length,
+      itemsWithResults: items.map(item => ({
+        name: item.file.name,
+        completed: item.completed,
+        hasMetadata: !!item.metadata,
+        isTargetFormat: item.file.name.toLowerCase().endsWith('.mkv') || item.file.name.toLowerCase().endsWith('.webm'),
+        qualifiesForExtraction: item.completed && item.metadata && (item.file.name.toLowerCase().endsWith('.mkv') || item.file.name.toLowerCase().endsWith('.webm'))
+      })),
+      qualifiedFiles: mkvFiles.length
+    });
 
     console.log('[BATCH SUBTITLE DEBUG] MKV files found:', {
       total: mkvFiles.length,
@@ -225,7 +237,9 @@ const OptimizedApp: React.FC = () => {
           
           try {
             // Extract all subtitles from this file
+            console.log(`[BATCH SUBTITLE DEBUG] Starting extractAllSubtitles for file ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name}`);
             await extractAllSubtitles(item.file);
+            console.log(`[BATCH SUBTITLE DEBUG] Completed extractAllSubtitles for file ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name}`);
           } finally {
             // Clean up progress suppression
             clearInterval(suppressProgressInterval);
@@ -497,7 +511,14 @@ const OptimizedApp: React.FC = () => {
       setBatchSubtitleExtractionTriggered(true);
       
       setTimeout(async () => {
-        await handleBatchSubtitleExtraction(fileList);
+        console.log('[BATCH DEBUG] setTimeout callback executing, calling handleBatchSubtitleExtraction...');
+        console.log('[BATCH DEBUG] Current fileList in setTimeout:', fileList.map(f => ({ name: f.file.name, completed: f.completed, hasMetadata: !!f.metadata })));
+        try {
+          await handleBatchSubtitleExtraction(fileList);
+          console.log('[BATCH DEBUG] handleBatchSubtitleExtraction completed successfully');
+        } catch (error) {
+          console.error('[BATCH DEBUG] handleBatchSubtitleExtraction failed:', error);
+        }
       }, 1000);
     }
   }, [fileList, saveAllSubtitles, batchSubtitleExtractionTriggered, batchSubtitleExtractionCancelled, processingQueue.length, handleBatchSubtitleExtraction]);

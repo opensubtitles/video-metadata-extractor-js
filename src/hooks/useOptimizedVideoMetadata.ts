@@ -910,19 +910,50 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
 
   // Extract all subtitles as ZIP
   const extractAllSubtitles = useCallback(async (file: File) => {
-    if (!ffmpegRef.current.loaded || !metadata) return;
+    console.log(`[EXTRACT ALL DEBUG] Starting extractAllSubtitles for: ${file.name}`);
+    console.log(`[EXTRACT ALL DEBUG] FFmpeg loaded: ${ffmpegRef.current.loaded}, Has metadata: ${!!metadata}`);
+    
+    if (!ffmpegRef.current.loaded || !metadata) {
+      console.log(`[EXTRACT ALL DEBUG] Early return - FFmpeg loaded: ${ffmpegRef.current.loaded}, metadata: ${!!metadata}`);
+      return;
+    }
 
     try {
       showProgress('Preparing batch subtitle extraction...', 5);
 
       const subtitleStreams = metadata.streams?.filter(stream => stream.codec_type === 'subtitle') || [];
+      console.log(`[EXTRACT ALL DEBUG] Found ${subtitleStreams.length} subtitle streams`);
       
       if (subtitleStreams.length === 0) {
+        console.log(`[EXTRACT ALL DEBUG] No subtitle streams found, showing error`);
         showError(ERROR_MESSAGES.SUBTITLE.NO_TRACKS);
         return;
       }
 
-      await cleanupFFmpegFiles();
+      console.log(`[EXTRACT ALL DEBUG] Starting COMPLETE FFmpeg reset`);
+      const resetStartTime = performance.now();
+      
+      // COMPLETE FFmpeg reset - terminate and reinitialize
+      try {
+        console.log(`[EXTRACT ALL DEBUG] Terminating FFmpeg instance...`);
+        await ffmpegRef.current.terminate();
+        console.log(`[EXTRACT ALL DEBUG] FFmpeg terminated successfully`);
+      } catch (terminateError) {
+        console.log(`[EXTRACT ALL DEBUG] FFmpeg terminate error (expected):`, terminateError);
+      }
+      
+      // Reinitialize FFmpeg completely fresh
+      console.log(`[EXTRACT ALL DEBUG] Reinitializing FFmpeg from scratch...`);
+      ffmpegRef.current = new FFmpeg();
+      
+      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
+      await ffmpegRef.current.load({
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+      });
+      
+      const resetEndTime = performance.now();
+      console.log(`[EXTRACT ALL DEBUG] FFmpeg reinitialized successfully in ${Math.round(resetEndTime - resetStartTime)}ms`);
 
       // Always load the complete file using chunked reading for batch subtitle extraction
       // Only metadata extraction uses header-only approach
@@ -935,6 +966,8 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       const fileData = await fileProcessor.processCompleteFile(file);
       showProgress('Loading file for batch extraction...', 15);
       await ffmpegRef.current.writeFile(FFMPEG_CONSTANTS.TEMP_FILES.INPUT, await fetchFile(fileData));
+      
+      console.log(`[EXTRACT ALL DEBUG] File loaded into fresh FFmpeg instance: ${FFMPEG_CONSTANTS.TEMP_FILES.INPUT}`);
 
       const zip = new JSZip();
       const extractedFiles: Array<{filename: string, data: Uint8Array}> = [];
@@ -949,6 +982,15 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
         showProgress(`Extracting subtitle ${i + 1}/${subtitleStreams.length} (${stream.language || 'unknown'})...`, progress);
 
         try {
+          // Log stream details for debugging
+          console.log(`[BATCH SUBTITLE EXTRACTION] Processing stream ${i + 1}/${subtitleStreams.length}:`, {
+            streamIndex,
+            realIndex: stream.index,
+            language: stream.language,
+            codecName: stream.codec_name,
+            forced: stream.forced
+          });
+
           // Generate unique filename for text-based subtitles
           const generated = generateSubtitleFilename(file.name, stream.language, stream.forced, stream.codec_name);
           let outputFilename = generated.filename;
@@ -964,7 +1006,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
           // Extract subtitle using the complete file (already loaded)
           console.log(`[BATCH SUBTITLE EXTRACTION] Extracting stream ${streamIndex} from complete file using format: ${outputFormat}`);
 
-          // Extract subtitle
+          // Extract subtitle using fresh FFmpeg instance (stream indices should be accurate now)
           try {
             await ffmpegRef.current.exec([
               '-i', FFMPEG_CONSTANTS.TEMP_FILES.INPUT,
@@ -990,15 +1032,21 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
             } catch (srtError) {
               // Try raw copy as last resort
               console.log(`[BATCH SUBTITLE EXTRACTION] SRT fallback failed for stream ${streamIndex}, trying raw copy...`);
-              const fallbackFilename = outputFilename.replace(/\.[^/.]+$/, '.txt');
-              await ffmpegRef.current.exec([
-                '-i', FFMPEG_CONSTANTS.TEMP_FILES.INPUT,
-                '-map', `0:${streamIndex}`,
-                '-c:s', 'copy',
-                fallbackFilename
-              ]);
-              outputFilename = fallbackFilename;
-              console.log(`[BATCH SUBTITLE EXTRACTION] Raw copy successful for stream ${streamIndex}`);
+              try {
+                const fallbackFilename = outputFilename.replace(/\.[^/.]+$/, '.txt');
+                await ffmpegRef.current.exec([
+                  '-i', FFMPEG_CONSTANTS.TEMP_FILES.INPUT,
+                  '-map', `0:${streamIndex}`,
+                  '-c:s', 'copy',
+                  fallbackFilename
+                ]);
+                outputFilename = fallbackFilename;
+                console.log(`[BATCH SUBTITLE EXTRACTION] Raw copy successful for stream ${streamIndex}`);
+              } catch (copyError) {
+                console.error(`[BATCH SUBTITLE EXTRACTION] All extraction methods failed for stream ${streamIndex}:`, copyError);
+                // Skip this stream entirely
+                continue;
+              }
             }
           }
 
@@ -1019,10 +1067,23 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       }
 
       if (extractedFiles.length > 0) {
+        console.log(`[ZIP DOWNLOAD DEBUG] Creating ZIP for file: ${file.name}`);
+        console.log(`[ZIP DOWNLOAD DEBUG] Extracted files:`, extractedFiles.map(f => ({ 
+          filename: f.filename, 
+          size: f.data.length 
+        })));
+        
         showProgress(`Creating ZIP with ${extractedFiles.length} subtitle files...`, 95);
         
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         const zipFilename = file.name.replace(/\.[^/.]+$/, '_subtitles.zip');
+        
+        console.log(`[ZIP DOWNLOAD DEBUG] ZIP blob created:`, {
+          filename: zipFilename,
+          blobSize: zipBlob.size,
+          blobType: zipBlob.type,
+          timestamp: new Date().toISOString()
+        });
         
         // Download ZIP
         const url = URL.createObjectURL(zipBlob);
@@ -1030,27 +1091,52 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
         a.href = url;
         a.download = zipFilename;
         document.body.appendChild(a);
+        
+        console.log(`[ZIP DOWNLOAD DEBUG] Triggering download:`, {
+          filename: zipFilename,
+          url: url,
+          downloadAttribute: a.download,
+          href: a.href
+        });
+        
         a.click();
+        
+        console.log(`[ZIP DOWNLOAD DEBUG] Download triggered - ZIP should be downloading: ${zipFilename}`);
+        
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        
+        console.log(`[ZIP DOWNLOAD DEBUG] Cleanup completed for: ${zipFilename}`);
 
         showProgress(`All subtitles extracted! ZIP file (${extractedFiles.length} files) downloaded.`, 100);
         
         // Auto-hide progress after 3 seconds
         setTimeout(hideProgress, 3000);
       } else {
+        console.log(`[ZIP DOWNLOAD DEBUG] No files extracted for: ${file.name}`);
         showError(ERROR_MESSAGES.SUBTITLE.EMPTY_RESULT);
       }
 
-      await cleanupFFmpegFiles();
+      // Light cleanup - just remove the input file since we have a fresh FFmpeg instance
+      try {
+        await ffmpegRef.current.deleteFile(FFMPEG_CONSTANTS.TEMP_FILES.INPUT);
+        console.log(`[EXTRACT ALL DEBUG] Cleaned up input file: ${FFMPEG_CONSTANTS.TEMP_FILES.INPUT}`);
+      } catch (cleanupError) {
+        console.log(`[EXTRACT ALL DEBUG] Cleanup error (expected):`, cleanupError);
+      }
 
     } catch (error) {
-      await cleanupFFmpegFiles();
+      // Light cleanup on error
+      try {
+        await ffmpegRef.current.deleteFile(FFMPEG_CONSTANTS.TEMP_FILES.INPUT);
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
       const errorMessage = error instanceof Error ? error.message : 'Failed to extract all subtitles';
       showError(`Batch extraction failed: ${errorMessage}`);
       hideProgress();
     }
-  }, [metadata, showProgress, hideProgress, showError, cleanupFFmpegFiles]);
+  }, [metadata, showProgress, hideProgress, showError]);
 
   // Handle file selection
   const handleFileSelect = useCallback(async (file: File) => {
