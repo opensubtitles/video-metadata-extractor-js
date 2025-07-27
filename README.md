@@ -1,6 +1,7 @@
 # Video Metadata Extractor
 
 [![Deploy to GitHub Pages](https://github.com/opensubtitles/video-metadata-extractor-js/actions/workflows/deploy.yml/badge.svg)](https://github.com/opensubtitles/video-metadata-extractor-js/actions/workflows/deploy.yml)
+[![npm version](https://badge.fury.io/js/@opensubtitles%2Fvideo-metadata-extractor.svg)](https://www.npmjs.com/package/@opensubtitles/video-metadata-extractor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A powerful, browser-based video metadata extractor that works with any video file format. Built with React, TypeScript, and intelligent processing engines.
