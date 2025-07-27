@@ -125,7 +125,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         <input
           type="file"
           id="videoFile"
-          accept="video/*"
+          accept="video/*,audio/*,.mkv,.avi,.wmv,.flv,.webm,.ogv,.3gp,.mov,.mp4,.m4v,.mpg,.mpeg,.m2v,.mts,.m2ts,.ts,.asf,.rm,.rmvb,.vob,.dat,.divx,.xvid,.f4v,.m4p,.3g2,.mj2,.mjpeg,.mjpg,.dv,.amv,.qtff,.gxf,.mxf,.nut,.ogg,.ogm,.nsv,.smv,.yuv,.y4m,.264,.265,.h264,.h265,.hevc,.vc1"
           onChange={handleFileChange}
           className="sr-only"
           multiple
@@ -206,7 +206,13 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                     <span>•</span>
                     <span>WMV</span>
                     <span>•</span>
-                    <span className="text-gray-400">and other video formats</span>
+                    <span>MPEG</span>
+                    <span>•</span>
+                    <span>3GP</span>
+                    <span>•</span>
+                    <span>OGV</span>
+                    <span>•</span>
+                    <span className="text-gray-400">and 25+ more formats</span>
                   </div>
                   
                   {/* Save All Subtitles Checkbox */}
