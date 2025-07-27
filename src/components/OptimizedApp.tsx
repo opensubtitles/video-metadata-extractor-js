@@ -588,45 +588,96 @@ const OptimizedApp: React.FC = () => {
             <h3 className="text-sm font-medium text-gray-600 mb-3">Quick Navigation:</h3>
             <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
               <div className="grid gap-2">
-                {/* Unified file navigation */}
-                {fileList.map((item, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      const element = document.getElementById(`file-result-${index}`);
-                      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
-                    className={`flex items-center gap-1 px-3 py-1 text-sm rounded-full transition-colors w-full justify-start ${
-                      item.completed && item.metadata
-                        ? 'bg-green-100 hover:bg-green-200 text-green-800'
-                        : item.error
-                        ? 'bg-red-100 hover:bg-red-200 text-red-800'
-                        : item.isProcessing
-                        ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'
-                        : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                    }`}
-                  >
-                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
-                    </svg>
-                    <span className="whitespace-nowrap">{item.file.name}</span>
-                    {item.completed && item.metadata && (
-                      <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                    {item.error && (
-                      <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                    {item.isProcessing && (
-                      <div className="w-3 h-3 ml-1">
-                        <div className="animate-spin rounded-full h-3 w-3 border-b border-current"></div>
+                {/* Enhanced file navigation with stream info */}
+                {fileList.map((item, index) => {
+                  // Calculate stream counts
+                  const videoStreams = item.metadata?.streams?.filter(s => s.codec_type === 'video').length || 0;
+                  const audioStreams = item.metadata?.streams?.filter(s => s.codec_type === 'audio').length || 0;
+                  const subtitleStreams = item.metadata?.streams?.filter(s => s.codec_type === 'subtitle').length || 0;
+                  const fileSize = formatFileSize(item.file.size);
+                  
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        const element = document.getElementById(`file-result-${index}`);
+                        element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      className={`flex items-center gap-3 px-4 py-3 text-sm rounded-lg transition-colors w-full justify-between hover:shadow-sm ${
+                        item.completed && item.metadata
+                          ? 'bg-green-50 hover:bg-green-100 text-green-800 border border-green-200'
+                          : item.error
+                          ? 'bg-red-50 hover:bg-red-100 text-red-800 border border-red-200'
+                          : item.isProcessing
+                          ? 'bg-yellow-50 hover:bg-yellow-100 text-yellow-800 border border-yellow-200'
+                          : 'bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                        </svg>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{item.file.name}</div>
+                          <div className="text-xs opacity-75 mt-0.5">{fileSize}</div>
+                        </div>
                       </div>
-                    )}
-                  </button>
-                ))}
+                      
+                      {item.completed && item.metadata && (
+                        <div className="flex items-center gap-3 text-xs">
+                          {/* Video streams */}
+                          {videoStreams > 0 && (
+                            <div className="flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M17,10.5V7A1,1 0 0,0 16,6H4A1,1 0 0,0 3,7V17A1,1 0 0,0 4,18H16A1,1 0 0,0 17,17V13.5L21,17.5V6.5L17,10.5Z"/>
+                              </svg>
+                              <span>{videoStreams}V</span>
+                            </div>
+                          )}
+                          
+                          {/* Audio streams */}
+                          {audioStreams > 0 && (
+                            <div className="flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/>
+                              </svg>
+                              <span>{audioStreams}A</span>
+                            </div>
+                          )}
+                          
+                          {/* Subtitle streams */}
+                          {subtitleStreams > 0 && (
+                            <div className="flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M20,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6A2,2 0 0,0 20,4M4,12H6V14H4V12M20,18H4V16H20V18M4,8H6V10H4V8M8,12H16V14H8V12M8,8H20V10H8V8Z"/>
+                              </svg>
+                              <span>{subtitleStreams}S</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Status icons */}
+                      <div className="flex-shrink-0">
+                        {item.completed && item.metadata && (
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                        {item.error && (
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                        {item.isProcessing && (
+                          <div className="w-4 h-4">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b border-current"></div>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
