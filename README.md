@@ -62,6 +62,168 @@ Try it online! Just drag and drop any video file to extract comprehensive metada
 - **🔧 TypeScript**: Fully typed with strict mode enabled for maximum reliability
 - **Memory management** with automatic cleanup and large file handling
 
+## 📦 NPM Package - Use as Module/Library
+
+Perfect for integrating video metadata extraction and subtitle processing into your own projects!
+
+### Installation
+
+```bash
+npm install @opensubtitles/video-metadata-extractor
+```
+
+### 🚀 Simplified API - Perfect for External Projects
+
+#### Fast Metadata Detection
+```typescript
+import { extractMetadata } from '@opensubtitles/video-metadata-extractor';
+
+const metadata = await extractMetadata(videoFile);
+console.log(`Duration: ${metadata.format.duration}s`);
+console.log(`Resolution: ${metadata.streams[0].width}x${metadata.streams[0].height}`);
+console.log(`Subtitle tracks: ${metadata.streams.filter(s => s.codec_type === 'subtitle').length}`);
+```
+
+#### Extract Individual Subtitles
+```typescript
+import { extractSubtitle } from '@opensubtitles/video-metadata-extractor';
+
+// Quick extraction (faster, may be incomplete)
+const subtitle = await extractSubtitle(videoFile, 2, { format: 'srt', quick: true });
+const subtitleText = new TextDecoder().decode(subtitle.data);
+
+// Full extraction (slower, complete)
+const fullSubtitle = await extractSubtitle(videoFile, 2, { format: 'srt', quick: false });
+```
+
+#### Extract All Subtitles as ZIP
+```typescript
+import { extractAllSubtitles } from '@opensubtitles/video-metadata-extractor';
+
+const result = await extractAllSubtitles(videoFile);
+console.log(`Extracted ${result.successfulExtractions}/${result.totalStreams} subtitles`);
+
+// Download ZIP file
+const url = URL.createObjectURL(result.zipBlob);
+const a = document.createElement('a');
+a.href = url;
+a.download = result.zipFilename;
+a.click();
+URL.revokeObjectURL(url);
+
+// Or access individual files
+result.extractedFiles.forEach(file => {
+  console.log(`${file.filename}: ${file.size} bytes (${file.language})`);
+});
+```
+
+#### Convenient Video Info
+```typescript
+import { getVideoInfo } from '@opensubtitles/video-metadata-extractor';
+
+const info = await getVideoInfo(videoFile);
+console.log(`Video: ${info.resolution} @ ${info.fps}fps`);
+console.log(`Duration: ${info.duration}`);
+console.log(`Subtitles: ${info.subtitles.length} tracks`);
+
+info.subtitles.forEach((sub, i) => {
+  console.log(`  ${i}: ${sub.language} (${sub.codec}) ${sub.forced ? '[FORCED]' : ''}`);
+});
+```
+
+#### Resource Cleanup
+```typescript
+import { cleanup } from '@opensubtitles/video-metadata-extractor';
+
+// Call when you're done processing videos
+await cleanup();
+```
+
+### 🔧 Advanced API - Full Control
+
+For complex scenarios requiring full control:
+
+```typescript
+import { VideoMetadataExtractor } from '@opensubtitles/video-metadata-extractor';
+
+const extractor = new VideoMetadataExtractor({ 
+  debug: true,
+  timeout: 60000,
+  chunkSize: 50 * 1024 * 1024 // 50MB chunks
+});
+
+await extractor.initialize();
+
+const metadata = await extractor.extractMetadata(file);
+const subtitle = await extractor.extractSubtitle(file, 2, { format: 'vtt' });
+const batch = await extractor.extractAllSubtitles(file);
+
+await extractor.terminate();
+```
+
+### 📋 Complete Example
+
+```typescript
+import { 
+  extractMetadata, 
+  extractSubtitle, 
+  extractAllSubtitles, 
+  getVideoInfo,
+  cleanup,
+  validateFile
+} from '@opensubtitles/video-metadata-extractor';
+
+async function processVideo(videoFile) {
+  try {
+    // 1. Validate file
+    const validation = validateFile(videoFile);
+    if (!validation.isValid) {
+      throw new Error(`Invalid file: ${validation.errors.join(', ')}`);
+    }
+
+    // 2. Get basic info
+    const info = await getVideoInfo(videoFile);
+    console.log(`Processing: ${info.filename}`);
+    console.log(`Video: ${info.resolution} @ ${info.fps}fps`);
+    console.log(`Duration: ${info.duration}`);
+    console.log(`Found ${info.subtitles.length} subtitle tracks`);
+
+    // 3. Extract specific subtitle if available
+    if (info.subtitles.length > 0) {
+      const firstSubtitle = await extractSubtitle(videoFile, info.subtitles[0].index, {
+        format: 'srt',
+        quick: true
+      });
+      console.log(`Extracted first subtitle: ${firstSubtitle.filename}`);
+    }
+
+    // 4. Extract all subtitles
+    if (info.subtitles.length > 1) {
+      const allSubtitles = await extractAllSubtitles(videoFile);
+      console.log(`Extracted ${allSubtitles.successfulExtractions} subtitles as ZIP`);
+    }
+
+  } catch (error) {
+    console.error('Processing failed:', error.message);
+  } finally {
+    // 5. Clean up resources
+    await cleanup();
+  }
+}
+```
+
+### 📊 Supported Formats
+
+**Video**: MP4, MKV, AVI, MOV, WMV, WebM, OGV, 3GP, FLV, M4V, ASF, RMVB, and more  
+**Audio**: MP3, AAC, WAV, FLAC, OGG, WMA, M4A, AIFF, and more  
+**Subtitles**: SRT, VTT, ASS, SSA, and more
+
+### 🔗 Documentation
+
+- **[📖 External Usage Guide](./EXTERNAL-USAGE.md)** - Complete guide for using as a module
+- **[🔗 NPM Package](https://www.npmjs.com/package/@opensubtitles/video-metadata-extractor)**
+- **[⚛️ TypeScript Support](https://www.npmjs.com/package/@opensubtitles/video-metadata-extractor)** - Full type definitions included
+
 ## 🛠️ Development
 
 ### Prerequisites
@@ -97,6 +259,21 @@ The project is automatically deployed to GitHub Pages via GitHub Actions on ever
 **Live URL**: https://opensubtitles.github.io/video-metadata-extractor-js/
 
 ## 📋 Changelog
+
+### v1.8.0 (2025-07-28) 🚀 NPM Package with Simplified API
+
+- 📦 **Simplified API**: Added 5 convenient functions for external projects
+  - `extractMetadata()` - Fast metadata detection
+  - `extractSubtitle()` - Individual subtitle extraction
+  - `extractAllSubtitles()` - Batch subtitle extraction as ZIP
+  - `getVideoInfo()` - Convenient metadata summary
+  - `cleanup()` - Resource cleanup
+- 🔧 **Advanced API**: Full `VideoMetadataExtractor` class still available for complex scenarios
+- 📚 **Comprehensive Documentation**: Complete API docs and external usage guide
+- 🎯 **Perfect for External Projects**: Easy integration as npm module/package
+- ✨ **38 Total Exports**: All utilities, constants, types, and React hooks included
+- 🔄 **Backward Compatible**: All existing functionality preserved
+- 📖 **Updated README**: Added complete NPM package usage examples
 
 ### v1.7.0 (2025-07-27) 🔥
 - 🛠️ **Fixed Batch Processing**: Complete FFmpeg reset between files eliminates "last file ZIP not saved" issue
