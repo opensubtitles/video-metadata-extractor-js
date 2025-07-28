@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import * as MP4Box from 'mp4box';
-import { VideoMetadata, ProgressState, ErrorState } from '../types';
+import { VideoMetadata, ProgressState, ErrorState } from '../types/index.js';
 
 // Helper function for downloading large files (>2GB) that exceed browser Blob limits
 const downloadLargeFile = (data: Uint8Array, filename: string, progressCallback?: (progress: number) => void): void => {

@@ -2,7 +2,7 @@
  * Subtitle extraction utilities
  */
 
-import { VideoMetadata } from '../types';
+import { VideoMetadata } from '../types/index.js';
 
 export interface SubtitleTrack {
   index: number;

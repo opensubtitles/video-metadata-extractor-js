@@ -15,12 +15,12 @@ import {
   SubtitleStream, 
   VideoStream, 
   AudioStream 
-} from '../types';
+} from '../types/index.js';
 import { 
   PROCESSING_CONSTANTS, 
   FFMPEG_CONSTANTS, 
   ERROR_MESSAGES
-} from '../constants';
+} from '../constants/index.js';
 import { 
   withRetry,
   validateFile,
@@ -28,8 +28,8 @@ import {
   formatFileSize,
   generateSubtitleFilename,
   getFormatFromFileName
-} from '../utils/common';
-import { createFileProcessor } from '../utils/fileProcessor';
+} from '../utils/common.js';
+import { createFileProcessor } from '../utils/fileProcessor.js';
 
 interface UseOptimizedVideoMetadataResult {
   metadata: VideoMetadata | null;

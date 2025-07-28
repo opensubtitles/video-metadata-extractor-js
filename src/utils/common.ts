@@ -3,8 +3,8 @@
  * Centralizes reusable functionality to eliminate duplication
  */
 
-import { PROCESSING_CONSTANTS, LANGUAGE_CODES, SUPPORTED_FORMATS, ERROR_MESSAGES } from '../constants';
-import { Result, FileValidationResult, ProcessingStats } from '../types';
+import { PROCESSING_CONSTANTS, LANGUAGE_CODES, SUPPORTED_FORMATS, ERROR_MESSAGES } from '../constants/index.js';
+import { Result, FileValidationResult, ProcessingStats } from '../types/index.js';
 
 /**
  * Async retry utility with exponential backoff

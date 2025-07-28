@@ -8,9 +8,9 @@ import {
   generateSubtitleFilename,
   safeDecodePreview,
   validateFile
-} from '../utils/common';
-import { createFileProcessor } from '../utils/fileProcessor';
-import { SUPPORTED_FORMATS } from '../constants';
+} from '../utils/common.js';
+import { createFileProcessor } from '../utils/fileProcessor.js';
+import { SUPPORTED_FORMATS } from '../constants/index.js';
 
 // Re-export centralized utilities for backward compatibility
 export { getFormatFromFileName, generateSubtitleFilename, safeDecodePreview };

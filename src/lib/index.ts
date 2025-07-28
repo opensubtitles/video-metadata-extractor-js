@@ -31,7 +31,7 @@ export {
   type ExtractionOptions,
   type SubtitleExtractionResult,
   type BatchExtractionResult
-} from './VideoMetadataExtractor';
+} from './VideoMetadataExtractor.js';
 
 // Utility functions
 export {
@@ -45,7 +45,7 @@ export {
   getSupportedVideoFormats,
   getSupportedAudioFormats,
   getAllSupportedFormats
-} from './utils';
+} from './utils.js';
 
 // Common utilities
 export {
@@ -55,7 +55,7 @@ export {
   formatDuration,
   validateFile,
   sleep
-} from '../utils/common';
+} from '../utils/common.js';
 
 // File processing utilities
 export {
@@ -64,7 +64,7 @@ export {
   isLargeFile,
   isVeryLargeFile,
   getRecommendedProcessingStrategy
-} from '../utils/fileProcessor';
+} from '../utils/fileProcessor.js';
 
 // Constants
 export {
@@ -74,7 +74,7 @@ export {
   LANGUAGE_CODES,
   FFMPEG_CONSTANTS,
   ERROR_MESSAGES
-} from '../constants';
+} from '../constants/index.js';
 
 // Types from the main application
 export type {
@@ -96,15 +96,15 @@ export type {
   BatchExtractionOptions,
   FileValidationResult,
   ProcessingStats
-} from '../types';
+} from '../types/index.js';
 
 // Type guards
 export {
   isVideoStream,
   isAudioStream,
   isSubtitleStream
-} from '../types';
+} from '../types/index.js';
 
 // React hooks (for React applications)
-export { useVideoMetadata } from '../hooks/useVideoMetadata';
-export { useOptimizedVideoMetadata } from '../hooks/useOptimizedVideoMetadata';
+export { useVideoMetadata } from '../hooks/useVideoMetadata.js';
+export { useOptimizedVideoMetadata } from '../hooks/useOptimizedVideoMetadata.js';

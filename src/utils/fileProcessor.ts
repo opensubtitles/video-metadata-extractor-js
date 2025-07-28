@@ -3,9 +3,9 @@
  * Centralizes file handling logic to eliminate duplication
  */
 
-import { PROCESSING_CONSTANTS, UI_CONSTANTS } from '../constants';
-import { ProcessingStats } from '../types';
-import { createProcessingStats, updateProcessingStats, sleep } from './common';
+import { PROCESSING_CONSTANTS, UI_CONSTANTS } from '../constants/index.js';
+import { ProcessingStats } from '../types/index.js';
+import { createProcessingStats, updateProcessingStats, sleep } from './common.js';
 
 /**
  * File processor class for handling large files with chunked processing

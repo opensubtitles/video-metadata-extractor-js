@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "outDir": "./dist",
+    "outDir": "./dist/lib",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -8,6 +8,7 @@
     "target": "ES2020",
     "lib": ["ES2020", "DOM"],
     "moduleResolution": "node",
+    "allowImportingTsExtensions": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -22,7 +23,10 @@
   "include": [
     "src/lib/**/*",
     "src/types/**/*",
-    "src/hooks/useVideoMetadata.ts"
+    "src/hooks/useVideoMetadata.ts",
+    "src/hooks/useOptimizedVideoMetadata.ts",
+    "src/utils/**/*",
+    "src/constants/**/*"
   ],
   "exclude": [
     "src/components/**/*",

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { toBlobURL, fetchFile } from '@ffmpeg/util';
-import { VideoMetadata, ProgressState, ErrorState } from '../types';
+import { VideoMetadata, ProgressState, ErrorState } from '../types/index.js';
 import JSZip from 'jszip';
 
 // Helper function to get file format from filename

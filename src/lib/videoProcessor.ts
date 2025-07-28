@@ -2,7 +2,7 @@
  * Video processing utilities
  */
 
-import { VideoMetadata } from '../types';
+import { VideoMetadata } from '../types/index.js';
 
 /**
  * Parse video duration to seconds

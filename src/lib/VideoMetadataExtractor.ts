@@ -17,25 +17,25 @@ import {
   SubtitleStream,
   VideoStream,
   AudioStream
-} from '../types';
+} from '../types/index.js';
 import { 
   generateSubtitleFilename, 
   safeDecodePreview, 
   createCompleteFileDataInChunks,
   downloadLargeFile,
   getFormatFromFileName 
-} from './utils';
+} from './utils.js';
 import { 
   PROCESSING_CONSTANTS,
   FFMPEG_CONSTANTS,
   ERROR_MESSAGES,
   SUPPORTED_FORMATS
-} from '../constants';
+} from '../constants/index.js';
 import { 
   withRetry,
   validateFile,
   sleep
-} from '../utils/common';
+} from '../utils/common.js';
 
 export interface VideoMetadataExtractorOptions {
   /** Custom FFmpeg core URL */
