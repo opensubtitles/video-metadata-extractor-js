@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Individual Subtitle Extraction Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: #f8f9fa;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .test-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .test-card.success { border-left-color: #28a745; }
+        .test-card.error { border-left-color: #dc3545; }
+        .test-card.warning { border-left-color: #ffc107; }
+        .test-card.running { 
+            border-left-color: #17a2b8; 
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.8; }
+            100% { opacity: 1; }
+        }
+        
+        .file-upload {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            text-align: center;
+            border: 3px dashed #ccc;
+            transition: all 0.3s ease;
+        }
+        
+        .file-upload.dragover {
+            border-color: #28a745;
+            background: #f0fff4;
+            transform: scale(1.02);
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .status.pending { background: #e9ecef; color: #6c757d; }
+        .status.running { background: #d1ecf1; color: #0c5460; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.warning { background: #fff3cd; color: #856404; }
+        
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        button:hover:not(:disabled) { background: #1e7e34; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        
+        .download-btn {
+            background: #007bff;
+            font-size: 13px;
+            padding: 10px 20px;
+        }
+        .download-btn:hover { background: #0056b3; }
+        
+        .results {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 15px 0;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+        }
+        
+        .metric {
+            display: inline-block;
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 20px;
+            margin: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .auto-run-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #17a2b8;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        details {
+            margin: 15px 0;
+        }
+        
+        summary {
+            cursor: pointer;
+            font-weight: bold;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+        
+        details[open] summary {
+            border-bottom: none;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        
+        details > div {
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-bottom-left-radius: 5px;
+            border-bottom-right-radius: 5px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 Individual Subtitle Extraction Test</h1>
+        <p><strong>@opensubtitles/video-metadata-extractor v1.8.0</strong></p>
+        <p>Random subtitle extraction with automatic test execution</p>
+    </div>
+
+    <div class="auto-run-info">
+        <h3>🚀 Auto-Run Feature</h3>
+        <p><strong>Just drop a video file and all tests will run automatically!</strong></p>
+        <p>This test will randomly select one subtitle track and extract it in both quick and full modes.</p>
+    </div>
+
+    <!-- File Upload Section -->
+    <div class="file-upload" id="fileUpload">
+        <h3>📁 Drop Video File Here</h3>
+        <p><strong>Drag & drop a video file to start automatic testing</strong></p>
+        <p>or <input type="file" id="fileInput" accept="video/*,.mkv,.mp4,.avi,.mov,.webm" style="display: none;"></p>
+        <button onclick="document.getElementById('fileInput').click()">Choose File</button>
+        <p><small>Best results with MKV files containing subtitle tracks</small></p>
+    </div>
+
+    <!-- File Info -->
+    <div class="test-card" id="fileInfo" style="display: none;">
+        <h3>📄 File Information</h3>
+        <div id="fileDetails"></div>
+    </div>
+
+    <!-- Test Progress -->
+    <div class="test-card" id="testProgress" style="display: none;">
+        <h3>⚡ Test Progress</h3>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div id="currentTest">Initializing...</div>
+    </div>
+
+    <!-- Stream Detection Results -->
+    <div class="test-card" id="streamCard" style="display: none;">
+        <span class="status pending" id="streamStatus">PENDING</span>
+        <h3>🔍 Stream Detection</h3>
+        <div class="results" id="streamResults"></div>
+    </div>
+
+    <!-- Random Subtitle Selection -->
+    <div class="test-card" id="selectionCard" style="display: none;">
+        <span class="status pending" id="selectionStatus">PENDING</span>
+        <h3>🎲 Random Subtitle Selection</h3>
+        <div class="results" id="selectionResults"></div>
+    </div>
+
+    <!-- Individual Extraction Results -->
+    <div class="test-card" id="extractionCard" style="display: none;">
+        <span class="status pending" id="extractionStatus">PENDING</span>
+        <h3>📝 Subtitle Extraction Results</h3>
+        <div class="results" id="extractionResults"></div>
+    </div>
+
+    <!-- Test Summary -->
+    <div class="test-card" id="summaryCard" style="display: none;">
+        <h3>📊 Test Summary</h3>
+        <div id="testSummary"></div>
+    </div>
+
+    <!-- Import the local build as our "NPM package" -->
+    <script type="module">
+        // Import the local built version
+        import { 
+            extractMetadata, 
+            extractSubtitle, 
+            getVideoInfo,
+            cleanup,
+            VideoMetadataExtractor
+        } from '/video-metadata-extractor-js/dist/lib/lib/index.js';
+
+        let currentFile = null;
+        let testResults = {};
+        let selectedSubtitleStream = null;
+        let testStartTime = null;
+
+        // Progress tracking
+        const testSteps = [
+            'Initializing',
+            'Detecting streams',
+            'Selecting random subtitle',
+            'Extracting (quick mode)',
+            'Extracting (full mode)',
+            'Finalizing results'
+        ];
+        let currentStep = 0;
+
+        function updateProgress(step, message = '') {
+            currentStep = step;
+            const progress = ((step + 1) / testSteps.length) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+            document.getElementById('currentTest').textContent = message || testSteps[step];
+        }
+
+        function log(message) {
+            console.log(`[${new Date().toLocaleTimeString()}] ${message}`);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return 'Unknown';
+            const hrs = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            return hrs > 0 ? `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}` 
+                          : `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function updateCardStatus(cardId, statusId, status, message = '') {
+            const card = document.getElementById(cardId);
+            const statusSpan = document.getElementById(statusId);
+            
+            card.className = `test-card ${status}`;
+            statusSpan.className = `status ${status}`;
+            statusSpan.textContent = status.toUpperCase();
+            
+            if (message) {
+                log(`${cardId}: ${message}`);
+            }
+        }
+
+        // File handling setup
+        function setupFileHandling() {
+            const fileUpload = document.getElementById('fileUpload');
+            const fileInput = document.getElementById('fileInput');
+
+            fileUpload.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileUpload.classList.add('dragover');
+            });
+
+            fileUpload.addEventListener('dragleave', () => {
+                fileUpload.classList.remove('dragover');
+            });
+
+            fileUpload.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileUpload.classList.remove('dragover');
+                handleFile(e.dataTransfer.files[0]);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                handleFile(e.target.files[0]);
+            });
+        }
+
+        function handleFile(file) {
+            if (!file) return;
+            
+            currentFile = file;
+            log(`File selected: ${file.name} (${formatBytes(file.size)})`);
+            
+            // Show file info
+            document.getElementById('fileInfo').style.display = 'block';
+            document.getElementById('fileDetails').innerHTML = `
+                <div class="metric">📁 ${file.name}</div>
+                <div class="metric">📊 ${formatBytes(file.size)}</div>
+                <div class="metric">🎬 ${file.type || 'Unknown type'}</div>
+            `;
+            
+            // Show test progress
+            document.getElementById('testProgress').style.display = 'block';
+            
+            // Show test cards
+            const cards = ['streamCard', 'selectionCard', 'extractionCard', 'summaryCard'];
+            cards.forEach(id => {
+                document.getElementById(id).style.display = 'block';
+            });
+            
+            // Auto-run all tests after a short delay
+            setTimeout(() => {
+                log('Auto-running individual subtitle extraction test...');
+                runAutoTest();
+            }, 1000);
+        }
+
+        async function runAutoTest() {
+            testStartTime = performance.now();
+            testResults = {};
+            
+            try {
+                updateProgress(0, 'Initializing FFmpeg and extracting metadata...');
+                await testStreamDetection();
+                
+                updateProgress(1, 'Analyzing detected streams...');
+                await testRandomSelection();
+                
+                updateProgress(2, 'Extracting selected subtitle...');
+                await testSubtitleExtraction();
+                
+                updateProgress(5, 'Generating test summary...');
+                generateSummary();
+                
+                log('Auto-test completed successfully');
+                
+            } catch (error) {
+                log(`Auto-test failed: ${error.message}`);
+                console.error('Auto-test error:', error);
+                
+                // Show error in summary
+                document.getElementById('summaryCard').style.display = 'block';
+                document.getElementById('testSummary').innerHTML = `
+                    <div class="status error">❌ Test Failed</div>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <details>
+                        <summary>Error Details</summary>
+                        <div><pre>${error.stack}</pre></div>
+                    </details>
+                `;
+            }
+        }
+
+        async function testStreamDetection() {
+            updateCardStatus('streamCard', 'streamStatus', 'running', 'Detecting all streams...');
+            
+            try {
+                const startTime = performance.now();
+                const metadata = await extractMetadata(currentFile);
+                const duration = performance.now() - startTime;
+                
+                const videoStreams = metadata.streams?.filter(s => s.codec_type === 'video') || [];
+                const audioStreams = metadata.streams?.filter(s => s.codec_type === 'audio') || [];
+                const subtitleStreams = metadata.streams?.filter(s => s.codec_type === 'subtitle') || [];
+                
+                document.getElementById('streamResults').innerHTML = `Detection completed in ${duration.toFixed(2)}ms
+
+📺 Video Streams: ${videoStreams.length}
+🔊 Audio Streams: ${audioStreams.length}  
+📝 Subtitle Streams: ${subtitleStreams.length}
+📋 Total Streams: ${metadata.streams?.length || 0}
+
+Video Details:
+${videoStreams.map(s => `  Stream ${s.index}: ${s.codec_name} ${s.width}x${s.height} @ ${s.r_frame_rate} fps`).join('\n')}
+
+Audio Details:
+${audioStreams.map(s => `  Stream ${s.index}: ${s.codec_name} ${s.channels}ch ${s.sample_rate}Hz (${s.tags?.language || 'Unknown'})`).join('\n')}
+
+Subtitle Details:
+${subtitleStreams.map(s => `  Stream ${s.index}: ${s.codec_name} (${s.tags?.language || 'Unknown'}) ${s.tags?.forced ? '[FORCED]' : ''}`).join('\n')}`;
+                
+                testResults.streamDetection = {
+                    success: true,
+                    duration: duration,
+                    videoStreams: videoStreams.length,
+                    audioStreams: audioStreams.length,
+                    subtitleStreams: subtitleStreams.length,
+                    totalStreams: metadata.streams?.length || 0,
+                    metadata: metadata
+                };
+                
+                updateCardStatus('streamCard', 'streamStatus', 'success', 
+                    `Found ${metadata.streams?.length || 0} streams (${subtitleStreams.length} subtitles)`);
+                
+            } catch (error) {
+                document.getElementById('streamResults').innerHTML = `❌ Stream detection failed: ${error.message}`;
+                testResults.streamDetection = { success: false, error: error.message };
+                updateCardStatus('streamCard', 'streamStatus', 'error', `Stream detection failed: ${error.message}`);
+                throw error;
+            }
+        }
+
+        async function testRandomSelection() {
+            updateCardStatus('selectionCard', 'selectionStatus', 'running', 'Selecting random subtitle...');
+            
+            try {
+                const metadata = testResults.streamDetection.metadata;
+                const subtitleStreams = metadata.streams?.filter(s => s.codec_type === 'subtitle') || [];
+                
+                if (subtitleStreams.length === 0) {
+                    document.getElementById('selectionResults').innerHTML = `⚠️ No subtitle streams found for random selection
+
+This file does not contain any extractable subtitle tracks.
+This is normal for many video files.
+
+Available streams:
+${metadata.streams?.map(s => `  Stream ${s.index}: ${s.codec_type} (${s.codec_name})`).join('\n') || 'No streams'}`;
+                    
+                    testResults.randomSelection = { 
+                        success: true, 
+                        hasSubtitles: false, 
+                        availableStreams: subtitleStreams.length 
+                    };
+                    
+                    updateCardStatus('selectionCard', 'selectionStatus', 'warning', 'No subtitle streams available');
+                    return;
+                }
+                
+                // Randomly select a subtitle stream
+                const randomIndex = Math.floor(Math.random() * subtitleStreams.length);
+                selectedSubtitleStream = subtitleStreams[randomIndex];
+                
+                document.getElementById('selectionResults').innerHTML = `🎲 Random Selection Complete!
+
+Available subtitle streams: ${subtitleStreams.length}
+Selected stream: ${selectedSubtitleStream.index}
+
+Selected Subtitle Details:
+  Stream Index: ${selectedSubtitleStream.index}
+  Codec: ${selectedSubtitleStream.codec_name}
+  Language: ${selectedSubtitleStream.tags?.language || 'Unknown'}
+  Forced: ${selectedSubtitleStream.tags?.forced ? 'Yes' : 'No'}
+  Title: ${selectedSubtitleStream.tags?.title || 'None'}
+
+All Available Subtitles:
+${subtitleStreams.map((s, i) => 
+    `  ${i === randomIndex ? '👉' : '  '} Stream ${s.index}: ${s.codec_name} (${s.tags?.language || 'Unknown'}) ${s.tags?.forced ? '[FORCED]' : ''}`
+).join('\n')}`;
+                
+                testResults.randomSelection = {
+                    success: true,
+                    hasSubtitles: true,
+                    totalSubtitles: subtitleStreams.length,
+                    selectedIndex: randomIndex,
+                    selectedStream: selectedSubtitleStream
+                };
+                
+                updateCardStatus('selectionCard', 'selectionStatus', 'success', 
+                    `Selected stream ${selectedSubtitleStream.index} from ${subtitleStreams.length} available`);
+                
+            } catch (error) {
+                document.getElementById('selectionResults').innerHTML = `❌ Random selection failed: ${error.message}`;
+                testResults.randomSelection = { success: false, error: error.message };
+                updateCardStatus('selectionCard', 'selectionStatus', 'error', `Random selection failed: ${error.message}`);
+                throw error;
+            }
+        }
+
+        async function testSubtitleExtraction() {
+            updateCardStatus('extractionCard', 'extractionStatus', 'running', 'Extracting subtitle...');
+            
+            try {
+                if (!selectedSubtitleStream) {
+                    document.getElementById('extractionResults').innerHTML = `⚠️ No subtitle stream selected for extraction
+
+This test completed successfully but found no extractable subtitles.
+The random selection process worked correctly.`;
+                    
+                    testResults.subtitleExtraction = { 
+                        success: true, 
+                        extracted: false, 
+                        reason: 'No subtitle streams available' 
+                    };
+                    
+                    updateCardStatus('extractionCard', 'extractionStatus', 'warning', 'No subtitles to extract');
+                    return;
+                }
+                
+                let quickData = null, fullData = null;
+                let quickTime = 0, fullTime = 0;
+                let quickError = null, fullError = null;
+                
+                // Test quick mode
+                updateProgress(3, `Extracting stream ${selectedSubtitleStream.index} (quick mode)...`);
+                try {
+                    const quickStart = performance.now();
+                    quickData = await extractSubtitle(currentFile, selectedSubtitleStream.index, {
+                        format: 'srt',
+                        quick: true
+                    });
+                    quickTime = performance.now() - quickStart;
+                    log(`Quick extraction successful: ${quickData.byteLength} bytes in ${quickTime.toFixed(2)}ms`);
+                } catch (error) {
+                    quickError = error;
+                    log(`Quick extraction failed: ${error.message}`);
+                }
+                
+                // Test full mode
+                updateProgress(4, `Extracting stream ${selectedSubtitleStream.index} (full mode)...`);
+                try {
+                    const fullStart = performance.now();
+                    fullData = await extractSubtitle(currentFile, selectedSubtitleStream.index, {
+                        format: 'srt',
+                        quick: false
+                    });
+                    fullTime = performance.now() - fullStart;
+                    log(`Full extraction successful: ${fullData.byteLength} bytes in ${fullTime.toFixed(2)}ms`);
+                } catch (error) {
+                    fullError = error;
+                    log(`Full extraction failed: ${error.message}`);
+                }
+                
+                // Generate results
+                const quickSuccess = quickData && !quickError;
+                const fullSuccess = fullData && !fullError;
+                
+                if (!quickSuccess && !fullSuccess) {
+                    throw new Error(`Both quick and full extraction failed. Quick: ${quickError?.message}, Full: ${fullError?.message}`);
+                }
+                
+                // Store for download
+                window.quickSubData = quickData;
+                window.fullSubData = fullData;
+                window.selectedStreamInfo = selectedSubtitleStream;
+                
+                const quickPreview = quickData ? new TextDecoder().decode(quickData.slice(0, 300)) + '...' : 'Failed';
+                const fullPreview = fullData ? new TextDecoder().decode(fullData.slice(0, 300)) + '...' : 'Failed';
+                
+                document.getElementById('extractionResults').innerHTML = `✅ Subtitle Extraction Complete!
+
+Selected Stream: ${selectedSubtitleStream.index} (${selectedSubtitleStream.tags?.language || 'Unknown'})
+Codec: ${selectedSubtitleStream.codec_name}
+
+Quick Mode Results:
+  Status: ${quickSuccess ? '✅ Success' : '❌ Failed'}
+  Time: ${quickTime.toFixed(2)}ms
+  Size: ${quickData ? formatBytes(quickData.byteLength) : 'N/A'}
+  ${quickError ? `Error: ${quickError.message}` : ''}
+
+Full Mode Results:
+  Status: ${fullSuccess ? '✅ Success' : '❌ Failed'}  
+  Time: ${fullTime.toFixed(2)}ms
+  Size: ${fullData ? formatBytes(fullData.byteLength) : 'N/A'}
+  ${fullError ? `Error: ${fullError.message}` : ''}
+
+${quickSuccess ? `Quick Mode Preview:
+${quickPreview}
+
+` : ''}${fullSuccess ? `Full Mode Preview:
+${fullPreview}
+
+` : ''}Download Options:`;
+                
+                // Add download buttons
+                const buttonsHtml = [];
+                if (quickSuccess) {
+                    buttonsHtml.push('<button class="download-btn" onclick="downloadSubtitle(\'quick\')">📥 Download Quick Mode SRT</button>');
+                }
+                if (fullSuccess) {
+                    buttonsHtml.push('<button class="download-btn" onclick="downloadSubtitle(\'full\')">📥 Download Full Mode SRT</button>');
+                }
+                
+                if (buttonsHtml.length > 0) {
+                    document.getElementById('extractionResults').innerHTML += '\n\n' + buttonsHtml.join(' ');
+                }
+                
+                testResults.subtitleExtraction = {
+                    success: true,
+                    extracted: quickSuccess || fullSuccess,
+                    quickMode: { success: quickSuccess, time: quickTime, size: quickData?.byteLength || 0, error: quickError?.message },
+                    fullMode: { success: fullSuccess, time: fullTime, size: fullData?.byteLength || 0, error: fullError?.message },
+                    selectedStream: selectedSubtitleStream
+                };
+                
+                const successCount = (quickSuccess ? 1 : 0) + (fullSuccess ? 1 : 0);
+                updateCardStatus('extractionCard', 'extractionStatus', 'success', 
+                    `Extracted ${successCount}/2 modes successfully`);
+                
+            } catch (error) {
+                document.getElementById('extractionResults').innerHTML = `❌ Subtitle extraction failed: ${error.message}
+                
+This may be normal if:
+- The subtitle format is not supported
+- The subtitles are encrypted or protected
+- The subtitles are burned-in (hardcoded) to the video
+
+Selected stream details:
+  Index: ${selectedSubtitleStream?.index || 'Unknown'}
+  Codec: ${selectedSubtitleStream?.codec_name || 'Unknown'}
+  Language: ${selectedSubtitleStream?.tags?.language || 'Unknown'}`;
+                
+                testResults.subtitleExtraction = { success: false, error: error.message };
+                updateCardStatus('extractionCard', 'extractionStatus', 'error', `Extraction failed: ${error.message}`);
+                throw error;
+            }
+        }
+
+        function generateSummary() {
+            const totalTime = performance.now() - testStartTime;
+            const allTests = Object.values(testResults);
+            const successfulTests = allTests.filter(t => t.success).length;
+            const totalTests = allTests.length;
+            
+            const isFullSuccess = successfulTests === totalTests;
+            const hasSubtitles = testResults.randomSelection?.hasSubtitles;
+            const extractedAny = testResults.subtitleExtraction?.extracted;
+            
+            let statusClass = 'success';
+            let statusIcon = '✅';
+            let statusText = 'All Tests Passed';
+            
+            if (!isFullSuccess) {
+                statusClass = 'error';
+                statusIcon = '❌';
+                statusText = 'Some Tests Failed';
+            } else if (hasSubtitles === false) {
+                statusClass = 'warning';
+                statusIcon = '⚠️';
+                statusText = 'No Subtitles Available';
+            } else if (!extractedAny) {
+                statusClass = 'warning';
+                statusIcon = '⚠️';
+                statusText = 'Extraction Not Possible';
+            }
+            
+            document.getElementById('testSummary').innerHTML = `
+                <div class="status ${statusClass}">${statusIcon} ${statusText}</div>
+                <div class="metric">⏱️ ${totalTime.toFixed(0)}ms Total</div>
+                <div class="metric">📋 ${successfulTests}/${totalTests} Tests</div>
+                <div class="metric">📁 ${formatBytes(currentFile.size)} File</div>
+                
+                <h4>Test Results Summary:</h4>
+                <ul>
+                    <li>${testResults.streamDetection?.success ? '✅' : '❌'} Stream Detection: ${testResults.streamDetection?.totalStreams || 0} streams found</li>
+                    <li>${testResults.randomSelection?.success ? '✅' : '❌'} Random Selection: ${testResults.randomSelection?.hasSubtitles ? `Selected from ${testResults.randomSelection.totalSubtitles} subtitles` : 'No subtitles available'}</li>
+                    <li>${testResults.subtitleExtraction?.success ? '✅' : '❌'} Subtitle Extraction: ${testResults.subtitleExtraction?.extracted ? 'Successfully extracted' : 'No extraction possible'}</li>
+                </ul>
+                
+                ${hasSubtitles && extractedAny ? `
+                <h4>Extraction Performance:</h4>
+                <ul>
+                    <li>Quick Mode: ${testResults.subtitleExtraction.quickMode.success ? `✅ ${testResults.subtitleExtraction.quickMode.time.toFixed(2)}ms` : '❌ Failed'}</li>
+                    <li>Full Mode: ${testResults.subtitleExtraction.fullMode.success ? `✅ ${testResults.subtitleExtraction.fullMode.time.toFixed(2)}ms` : '❌ Failed'}</li>
+                </ul>
+                ` : ''}
+                
+                <details style="margin-top: 15px;">
+                    <summary>Detailed Test Data</summary>
+                    <div><pre>${JSON.stringify(testResults, null, 2)}</pre></div>
+                </details>
+                
+                <p style="margin-top: 15px;"><strong>Test completed in ${totalTime.toFixed(0)}ms</strong></p>
+            `;
+            
+            updateProgress(5, 'Test completed!');
+        }
+
+        // Download functions
+        window.downloadSubtitle = function(mode) {
+            const data = mode === 'quick' ? window.quickSubData : window.fullSubData;
+            const streamInfo = window.selectedStreamInfo;
+            
+            if (!data) {
+                alert('No subtitle data available for download');
+                return;
+            }
+            
+            const blob = new Blob([data], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            const language = streamInfo?.tags?.language || 'unknown';
+            const streamIndex = streamInfo?.index || 'x';
+            const filename = `${currentFile.name.replace(/\.[^/.]+$/, '')}_stream${streamIndex}_${language}_${mode}.srt`;
+            
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            log(`Downloaded: ${filename}`);
+        };
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            setupFileHandling();
+            log('Individual subtitle extraction test initialized');
+            log('Ready for automatic testing - just drop a video file!');
+        });
+    </script>
+</body>
+</html>
