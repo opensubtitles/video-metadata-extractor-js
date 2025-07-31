@@ -5,7 +5,8 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL, fetchFile } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
+import { cachedToBlobURL } from '../utils/ffmpegCache.js';
 import JSZip from 'jszip';
 
 import { 
@@ -948,8 +949,8 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
       await ffmpegRef.current.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        coreURL: await cachedToBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await cachedToBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
       });
       
       const resetEndTime = performance.now();
@@ -1222,9 +1223,9 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
           ffmpegBaseURL 
         });
         
-        console.log('[FFMPEG DEBUG] Creating blob URLs from local files...');
-        const coreURL = await toBlobURL(coreJSUrl, 'text/javascript');
-        const wasmURL = await toBlobURL(wasmUrl, 'application/wasm');
+        console.log('[FFMPEG DEBUG] Creating blob URLs from local files (with cache)...');
+        const coreURL = await cachedToBlobURL(coreJSUrl, 'text/javascript');
+        const wasmURL = await cachedToBlobURL(wasmUrl, 'application/wasm');
         
         console.log('[FFMPEG DEBUG] Local blob URLs created successfully:', { coreURL, wasmURL });
         

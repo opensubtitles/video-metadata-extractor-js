@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 Comprehensive NPM Package Test Suite</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: #f8f9fa;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .test-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid #007bff;
+        }
+        .test-card.success {
+            border-left-color: #28a745;
+        }
+        .test-card.error {
+            border-left-color: #dc3545;
+        }
+        .test-card.warning {
+            border-left-color: #ffc107;
+        }
+        .test-card.running {
+            border-left-color: #17a2b8;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .status.pending { background: #e9ecef; color: #6c757d; }
+        .status.running { background: #d1ecf1; color: #0c5460; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.warning { background: #fff3cd; color: #856404; }
+        
+        .file-upload {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            text-align: center;
+            border: 2px dashed #ccc;
+        }
+        .file-upload.dragover {
+            border-color: #007bff;
+            background: #f0f8ff;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        button:hover:not(:disabled) { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        
+        .results {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .metric {
+            display: inline-block;
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 20px;
+            margin: 2px;
+            font-size: 12px;
+        }
+        
+        .download-btn {
+            background: #28a745;
+            margin: 10px 5px;
+        }
+        .download-btn:hover { background: #1e7e34; }
+        
+        .log {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #0056b3);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧪 Comprehensive NPM Package Test Suite</h1>
+        <p><strong>@opensubtitles/video-metadata-extractor v1.8.0</strong></p>
+        <p>Complete functional testing of all video processing capabilities</p>
+    </div>
+
+    <div class="file-upload" id="file-upload">
+        <h3>📁 Upload Test Video File</h3>
+        <p>Drag and drop a video file or click to select</p>
+        <input type="file" id="video-file" accept="video/*,.mkv,.avi,.mov,.mp4,.webm" style="display: none;">
+        <button onclick="document.getElementById('video-file').click()">Choose File</button>
+        <p><small>Recommended: MKV files with multiple subtitle tracks for comprehensive testing</small></p>
+    </div>
+
+    <div class="test-grid">
+        <!-- Test 1: Package Import -->
+        <div class="test-card" id="test-import">
+            <span class="status pending">PENDING</span>
+            <h3>📦 Package Import Test</h3>
+            <p>Import all NPM package functions and verify availability</p>
+            <div class="results" id="import-results"></div>
+        </div>
+
+        <!-- Test 2: Stream Detection -->
+        <div class="test-card" id="test-streams">
+            <span class="status pending">PENDING</span>
+            <h3>🔍 Stream Detection Test</h3>
+            <p>Detect all video, audio, and subtitle streams</p>
+            <div class="results" id="streams-results"></div>
+        </div>
+
+        <!-- Test 3: Metadata Extraction -->
+        <div class="test-card" id="test-metadata">
+            <span class="status pending">PENDING</span>
+            <h3>📊 Metadata Extraction Test</h3>
+            <p>Extract comprehensive video metadata</p>
+            <div class="results" id="metadata-results"></div>
+        </div>
+
+        <!-- Test 4: Video Info -->
+        <div class="test-card" id="test-videoinfo">
+            <span class="status pending">PENDING</span>
+            <h3>ℹ️ Video Info Test</h3>
+            <p>Get convenient video information summary</p>
+            <div class="results" id="videoinfo-results"></div>
+        </div>
+
+        <!-- Test 5: Individual Subtitle Extraction -->
+        <div class="test-card" id="test-single-subtitle">
+            <span class="status pending">PENDING</span>
+            <h3>📄 Single Subtitle Extraction</h3>
+            <p>Extract individual subtitle tracks (quick & full modes)</p>
+            <div class="results" id="single-subtitle-results"></div>
+        </div>
+
+        <!-- Test 6: Batch Subtitle Extraction -->
+        <div class="test-card" id="test-batch-subtitles">
+            <span class="status pending">PENDING</span>
+            <h3>📦 Batch Subtitle Extraction</h3>
+            <p>Extract all subtitle tracks as ZIP file</p>
+            <div class="results" id="batch-subtitles-results"></div>
+        </div>
+
+        <!-- Test 7: Advanced API -->
+        <div class="test-card" id="test-advanced">
+            <span class="status pending">PENDING</span>
+            <h3>🔧 Advanced API Test</h3>
+            <p>Test VideoMetadataExtractor class with full control</p>
+            <div class="results" id="advanced-results"></div>
+        </div>
+
+        <!-- Test 8: Performance Test -->
+        <div class="test-card" id="test-performance">
+            <span class="status pending">PENDING</span>
+            <h3>⚡ Performance Test</h3>
+            <p>Measure processing times and memory usage</p>
+            <div class="results" id="performance-results"></div>
+        </div>
+    </div>
+
+    <div class="results">
+        <h2>📊 Test Summary</h2>
+        <div id="test-summary">
+            <p>Upload a video file to begin testing...</p>
+        </div>
+    </div>
+
+    <div class="results">
+        <h2>📋 Test Log</h2>
+        <div class="log" id="test-log"></div>
+    </div>
+
+    <script type="module">
+        // Global test state
+        let testFile = null;
+        let extractorAPI = null;
+        let testResults = {};
+        let startTime = null;
+
+        // Logging function
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('test-log');
+            const colors = {
+                info: '#6c757d',
+                success: '#28a745',
+                error: '#dc3545',
+                warning: '#ffc107'
+            };
+            logDiv.innerHTML += `<div style="color: ${colors[type]};">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        // Update test status
+        function updateTestStatus(testId, status, message = '') {
+            const card = document.getElementById(testId);
+            const statusSpan = card.querySelector('.status');
+            
+            // Remove old classes
+            card.classList.remove('success', 'error', 'warning', 'running');
+            statusSpan.classList.remove('pending', 'running', 'success', 'error', 'warning');
+            
+            // Add new classes
+            card.classList.add(status === 'success' ? 'success' : status === 'error' ? 'error' : 
+                             status === 'warning' ? 'warning' : status === 'running' ? 'running' : '');
+            statusSpan.classList.add(status);
+            statusSpan.textContent = status.toUpperCase();
+            
+            if (message) {
+                log(`${testId}: ${message}`, status === 'success' ? 'success' : status === 'error' ? 'error' : 'info');
+            }
+        }
+
+        // File upload handling
+        const fileUpload = document.getElementById('file-upload');
+        const fileInput = document.getElementById('video-file');
+
+        fileUpload.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUpload.classList.add('dragover');
+        });
+
+        fileUpload.addEventListener('dragleave', () => {
+            fileUpload.classList.remove('dragover');
+        });
+
+        fileUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileSelect(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            testFile = file;
+            log(`File selected: ${file.name} (${Math.round(file.size / (1024 * 1024))} MB)`, 'info');
+            
+            fileUpload.innerHTML = `
+                <h3>✅ File Selected</h3>
+                <p><strong>${file.name}</strong></p>
+                <p>Size: ${Math.round(file.size / (1024 * 1024))} MB</p>
+                <p>Type: ${file.type || 'Unknown'}</p>
+                <button onclick="runAllTests()">🚀 Run All Tests</button>
+                <button onclick="location.reload()">🔄 Reset</button>
+            `;
+        }
+
+        // Test 1: Import Package
+        async function testImport() {
+            updateTestStatus('test-import', 'running', 'Importing NPM package...');
+            
+            try {
+                // Import the ES module version
+                const imported = await import('https://unpkg.com/@opensubtitles/video-metadata-extractor@1.8.0/dist/index.js');
+                
+                extractorAPI = imported;
+                
+                const functions = [
+                    'extractMetadata',
+                    'extractSubtitle',
+                    'extractAllSubtitles',
+                    'getVideoInfo',
+                    'cleanup',
+                    'getAllSupportedFormats',
+                    'validateFile',
+                    'VideoMetadataExtractor'
+                ];
+                
+                const results = functions.map(fn => ({
+                    name: fn,
+                    type: typeof imported[fn],
+                    available: typeof imported[fn] === 'function'
+                }));
+                
+                const allAvailable = results.every(r => r.available);
+                const supportedFormats = imported.getAllSupportedFormats();
+                
+                document.getElementById('import-results').innerHTML = `
+                    <div class="metrics">
+                        <span class="metric">✅ ${results.filter(r => r.available).length}/${results.length} Functions</span>
+                        <span class="metric">📦 ${supportedFormats.length} Formats</span>
+                    </div>
+                    <details>
+                        <summary>Function Details</summary>
+                        <ul>
+                            ${results.map(r => `<li>${r.available ? '✅' : '❌'} ${r.name}: ${r.type}</li>`).join('')}
+                        </ul>
+                    </details>
+                `;
+                
+                testResults.import = { success: allAvailable, functions: results.length, formats: supportedFormats.length };
+                updateTestStatus('test-import', allAvailable ? 'success' : 'error', 
+                    allAvailable ? 'All functions imported successfully' : 'Some functions missing');
+                
+            } catch (error) {
+                document.getElementById('import-results').innerHTML = `<p style="color: #dc3545;">❌ Import failed: ${error.message}</p>`;
+                testResults.import = { success: false, error: error.message };
+                updateTestStatus('test-import', 'error', `Import failed: ${error.message}`);
+            }
+        }
+
+        // Test 2: Stream Detection
+        async function testStreamDetection() {
+            if (!testFile || !extractorAPI) return;
+            
+            updateTestStatus('test-streams', 'running', 'Detecting streams...');
+            
+            try {
+                const metadata = await extractorAPI.extractMetadata(testFile);
+                
+                const videoStreams = metadata.streams.filter(s => s.codec_type === 'video');
+                const audioStreams = metadata.streams.filter(s => s.codec_type === 'audio');
+                const subtitleStreams = metadata.streams.filter(s => s.codec_type === 'subtitle');
+                
+                document.getElementById('streams-results').innerHTML = `
+                    <div class="metrics">
+                        <span class="metric">🎬 ${videoStreams.length} Video</span>
+                        <span class="metric">🔊 ${audioStreams.length} Audio</span>
+                        <span class="metric">📄 ${subtitleStreams.length} Subtitle</span>
+                    </div>
+                    <details>
+                        <summary>Stream Details</summary>
+                        <h4>Video Streams:</h4>
+                        <ul>
+                            ${videoStreams.map((s, i) => `<li>Stream ${i}: ${s.codec_name} ${s.width}x${s.height}</li>`).join('')}
+                        </ul>
+                        <h4>Audio Streams:</h4>
+                        <ul>
+                            ${audioStreams.map((s, i) => `<li>Stream ${i}: ${s.codec_name} (${s.channels} channels)</li>`).join('')}
+                        </ul>
+                        <h4>Subtitle Streams:</h4>
+                        <ul>
+                            ${subtitleStreams.map((s, i) => `<li>Stream ${s.index}: ${s.codec_name} (${s.language || 'unknown'}) ${s.forced ? '[FORCED]' : ''}</li>`).join('')}
+                        </ul>
+                    </details>
+                `;
+                
+                testResults.streams = {
+                    success: true,
+                    video: videoStreams.length,
+                    audio: audioStreams.length,
+                    subtitle: subtitleStreams.length,
+                    total: metadata.streams.length
+                };
+                
+                updateTestStatus('test-streams', 'success', `Found ${metadata.streams.length} streams total`);
+                
+            } catch (error) {
+                document.getElementById('streams-results').innerHTML = `<p style="color: #dc3545;">❌ Stream detection failed: ${error.message}</p>`;
+                testResults.streams = { success: false, error: error.message };
+                updateTestStatus('test-streams', 'error', `Stream detection failed: ${error.message}`);
+            }
+        }
+
+        // Test 3: Metadata Extraction
+        async function testMetadata() {
+            if (!testFile || !extractorAPI) return;
+            
+            updateTestStatus('test-metadata', 'running', 'Extracting metadata...');
+            
+            try {
+                const startTime = performance.now();
+                const metadata = await extractorAPI.extractMetadata(testFile);
+                const duration = Math.round(performance.now() - startTime);
+                
+                document.getElementById('metadata-results').innerHTML = `
+                    <div class="metrics">
+                        <span class="metric">⏱️ ${duration}ms</span>
+                        <span class="metric">📊 ${metadata.format.duration}s duration</span>
+                        <span class="metric">💾 ${Math.round(parseInt(metadata.format.size) / (1024*1024))}MB</span>
+                    </div>
+                    <details>
+                        <summary>Metadata Details</summary>
+                        <pre>${JSON.stringify({
+                            filename: metadata.format.filename,
+                            size: metadata.format.size,
+                            duration: metadata.format.duration,
+                            format: metadata.format.format_name,
+                            fps: metadata.format.fps,
+                            streams: metadata.streams.length
+                        }, null, 2)}</pre>
+                    </details>
+                `;
+                
+                testResults.metadata = {
+                    success: true,
+                    duration: duration,
+                    videoData: metadata
+                };
+                
+                updateTestStatus('test-metadata', 'success', `Metadata extracted in ${duration}ms`);
+                
+            } catch (error) {
+                document.getElementById('metadata-results').innerHTML = `<p style="color: #dc3545;">❌ Metadata extraction failed: ${error.message}</p>`;
+                testResults.metadata = { success: false, error: error.message };
+                updateTestStatus('test-metadata', 'error', `Metadata extraction failed: ${error.message}`);
+            }
+        }
+
+        // Test 4: Video Info
+        async function testVideoInfo() {
+            if (!testFile || !extractorAPI) return;
+            
+            updateTestStatus('test-videoinfo', 'running', 'Getting video info...');
+            
+            try {
+                const startTime = performance.now();
+                const info = await extractorAPI.getVideoInfo(testFile);
+                const duration = Math.round(performance.now() - startTime);
+                
+                document.getElementById('videoinfo-results').innerHTML = `
+                    <div class="metrics">
+                        <span class="metric">⏱️ ${duration}ms</span>
+                        <span class="metric">🎬 ${info.resolution}</span>
+                        <span class="metric">📄 ${info.subtitles.length} subs</span>
+                    </div>
+                    <details>
+                        <summary>Video Info Details</summary>
+                        <ul>
+                            <li><strong>Filename:</strong> ${info.filename}</li>
+                            <li><strong>Size:</strong> ${info.size}</li>
+                            <li><strong>Duration:</strong> ${info.duration}</li>
+                            <li><strong>Resolution:</strong> ${info.resolution}</li>
+                            <li><strong>FPS:</strong> ${info.fps}</li>
+                            <li><strong>Video Codec:</strong> ${info.videoCodec}</li>
+                            <li><strong>Audio Codec:</strong> ${info.audioCodec}</li>
+                        </ul>
+                        <h4>Subtitles:</h4>
+                        <ul>
+                            ${info.subtitles.map(sub => `<li>Index ${sub.index}: ${sub.language || 'unknown'} (${sub.codec}) ${sub.forced ? '[FORCED]' : ''}</li>`).join('')}
+                        </ul>
+                    </details>
+                `;
+                
+                testResults.videoInfo = {
+                    success: true,
+                    duration: duration,
+                    info: info
+                };
+                
+                updateTestStatus('test-videoinfo', 'success', `Video info extracted in ${duration}ms`);
+                
+            } catch (error) {
+                document.getElementById('videoinfo-results').innerHTML = `<p style="color: #dc3545;">❌ Video info extraction failed: ${error.message}</p>`;
+                testResults.videoInfo = { success: false, error: error.message };
+                updateTestStatus('test-videoinfo', 'error', `Video info failed: ${error.message}`);
+            }
+        }
+
+        // Test 5: Single Subtitle Extraction
+        async function testSingleSubtitle() {
+            if (!testFile || !extractorAPI) return;
+            
+            updateTestStatus('test-single-subtitle', 'running', 'Extracting individual subtitles...');
+            
+            try {
+                // First get metadata to find subtitle streams
+                const metadata = await extractorAPI.extractMetadata(testFile);
+                const subtitleStreams = metadata.streams.filter(s => s.codec_type === 'subtitle');
+                
+                if (subtitleStreams.length === 0) {
+                    document.getElementById('single-subtitle-results').innerHTML = `<p style="color: #ffc107;">⚠️ No subtitle streams found for testing</p>`;
+                    testResults.singleSubtitle = { success: true, subtitles: 0, message: 'No subtitles available' };
+                    updateTestStatus('test-single-subtitle', 'warning', 'No subtitle streams found');
+                    return;
+                }
+                
+                const results = [];
+                
+                // Test first subtitle in quick mode
+                const firstStream = subtitleStreams[0];
+                const quickStart = performance.now();
+                const quickSub = await extractorAPI.extractSubtitle(testFile, firstStream.index, {
+                    format: 'srt',
+                    quick: true
+                });
+                const quickDuration = Math.round(performance.now() - quickStart);
+                results.push({ mode: 'quick', duration: quickDuration, size: quickSub.size });
+                
+                // Test first subtitle in full mode
+                const fullStart = performance.now();
+                const fullSub = await extractorAPI.extractSubtitle(testFile, firstStream.index, {
+                    format: 'srt',
+                    quick: false
+                });
+                const fullDuration = Math.round(performance.now() - fullStart);
+                results.push({ mode: 'full', duration: fullDuration, size: fullSub.size });
+                
+                document.getElementById('single-subtitle-results').innerHTML = `
+                    <div class="metrics">
+                        <span class="metric">📄 ${subtitleStreams.length} Available</span>
+                        <span class="metric">⚡ ${quickDuration}ms Quick</span>
+                        <span class="metric">🔍 ${fullDuration}ms Full</span>
+                    </div>
+                    <details>
+                        <summary>Extraction Results</summary>
+                        <h4>Quick Mode:</h4>
+                        <ul>
+                            <li>Duration: ${quickDuration}ms</li>
+                            <li>Size: ${quickSub.size} bytes</li>
+                            <li>Filename: ${quickSub.filename}</li>
+                        </ul>
+                        <h4>Full Mode:</h4>
+                        <ul>
+                            <li>Duration: ${fullDuration}ms</li>
+                            <li>Size: ${fullSub.size} bytes</li>
+                            <li>Filename: ${fullSub.filename}</li>
+                        </ul>
+                        <h4>Preview:</h4>
+                        <pre style="max-height: 150px; overflow-y: auto;">${quickSub.preview}</pre>
+                    </details>
+                    <button class="download-btn" onclick="downloadSubtitle('${quickSub.filename}', quickSubData)">📥 Download Quick</button>
+                    <button class="download-btn" onclick="downloadSubtitle('${fullSub.filename}', fullSubData)">📥 Download Full</button>
+                `;
+                
+                // Store subtitle data for download
+                window.quickSubData = quickSub.data;
+                window.fullSubData = fullSub.data;
+                
+                testResults.singleSubtitle = {
+                    success: true,
+                    subtitles: subtitleStreams.length,
+                    quickTime: quickDuration,
+                    fullTime: fullDuration,
+                    quickSize: quickSub.size,
+                    fullSize: fullSub.size
+                };
+                
+                updateTestStatus('test-single-subtitle', 'success', `Extracted ${subtitleStreams.length} subtitle streams`);
+                
+            } catch (error) {
+                document.getElementById('single-subtitle-results').innerHTML = `<p style="color: #dc3545;">❌ Single subtitle extraction failed: ${error.message}</p>`;
+                testResults.singleSubtitle = { success: false, error: error.message };
+                updateTestStatus('test-single-subtitle', 'error', `Single subtitle failed: ${error.message}`);
+            }
+        }
+
+        // Test 6: Batch Subtitle Extraction
+        async function testBatchSubtitles() {
+            if (!testFile || !extractorAPI) return;
+            
+            updateTestStatus('test-batch-subtitles', 'running', 'Extracting all subtitles...');
+            
+            try {
+                const startTime = performance.now();
+                const batchResult = await extractorAPI.extractAllSubtitles(testFile);
+                const duration = Math.round(performance.now() - startTime);
+                
+                document.getElementById('batch-subtitles-results').innerHTML = `
+                    <div class="metrics">
+                        <span class="metric">⏱️ ${duration}ms</span>
+                        <span class="metric">✅ ${batchResult.successfulExtractions}/${batchResult.totalStreams}</span>
+                        <span class="metric">📦 ${Math.round(batchResult.zipBlob.size / 1024)}KB ZIP</span>
+                    </div>
+                    <details>
+                        <summary>Batch Results</summary>
+                        <ul>
+                            <li>Total streams: ${batchResult.totalStreams}</li>
+                            <li>Successful: ${batchResult.successfulExtractions}</li>
+                            <li>ZIP size: ${Math.round(batchResult.zipBlob.size / 1024)} KB</li>
+                            <li>ZIP filename: ${batchResult.zipFilename}</li>
+                        </ul>
+                        <h4>Individual Files:</h4>
+                        <ul>
+                            ${batchResult.extractedFiles.map(file => 
+                                `<li>${file.filename}: ${file.size} bytes (${file.language || 'unknown'})</li>`
+                            ).join('')}
+                        </ul>
+                    </details>
+                    <button class="download-btn" onclick="downloadZip()">📥 Download ZIP (${Math.round(batchResult.zipBlob.size / 1024)}KB)</button>
+                `;
+                
+                // Store ZIP data for download
+                window.batchZipData = batchResult;
+                
+                testResults.batchSubtitles = {
+                    success: true,
+                    duration: duration,
+                    total: batchResult.totalStreams,
+                    successful: batchResult.successfulExtractions,
+                    zipSize: batchResult.zipBlob.size
+                };
+                
+                updateTestStatus('test-batch-subtitles', 'success', 
+                    `Extracted ${batchResult.successfulExtractions}/${batchResult.totalStreams} subtitles in ${duration}ms`);
+                
+            } catch (error) {
+                document.getElementById('batch-subtitles-results').innerHTML = `<p style="color: #dc3545;">❌ Batch subtitle extraction failed: ${error.message}</p>`;
+                testResults.batchSubtitles = { success: false, error: error.message };
+                updateTestStatus('test-batch-subtitles', 'error', `Batch subtitles failed: ${error.message}`);
+            }
+        }
+
+        // Test 7: Advanced API
+        async function testAdvancedAPI() {
+            if (!testFile || !extractorAPI) return;
+            
+            updateTestStatus('test-advanced', 'running', 'Testing advanced API...');
+            
+            try {
+                const extractor = new extractorAPI.VideoMetadataExtractor({
+                    debug: false,
+                    timeout: 60000
+                });
+                
+                const initStart = performance.now();
+                await extractor.initialize();
+                const initDuration = Math.round(performance.now() - initStart);
+                
+                const metadataStart = performance.now();
+                const metadata = await extractor.extractMetadata(testFile);
+                const metadataDuration = Math.round(performance.now() - metadataStart);
+                
+                await extractor.terminate();
+                
+                document.getElementById('advanced-results').innerHTML = `
+                    <div class="metrics">
+                        <span class="metric">🚀 ${initDuration}ms Init</span>
+                        <span class="metric">📊 ${metadataDuration}ms Extract</span>
+                        <span class="metric">✅ Full Control</span>
+                    </div>
+                    <details>
+                        <summary>Advanced API Results</summary>
+                        <ul>
+                            <li>Initialization: ${initDuration}ms</li>
+                            <li>Metadata extraction: ${metadataDuration}ms</li>
+                            <li>Streams found: ${metadata.streams.length}</li>
+                            <li>Termination: Successful</li>
+                        </ul>
+                        <h4>Available Methods:</h4>
+                        <ul>
+                            <li>✅ initialize()</li>
+                            <li>✅ extractMetadata()</li>
+                            <li>✅ extractSubtitle()</li>
+                            <li>✅ extractAllSubtitles()</li>
+                            <li>✅ terminate()</li>
+                        </ul>
+                    </details>
+                `;
+                
+                testResults.advanced = {
+                    success: true,
+                    initTime: initDuration,
+                    extractTime: metadataDuration,
+                    streams: metadata.streams.length
+                };
+                
+                updateTestStatus('test-advanced', 'success', `Advanced API working (${initDuration + metadataDuration}ms total)`);
+                
+            } catch (error) {
+                document.getElementById('advanced-results').innerHTML = `<p style="color: #dc3545;">❌ Advanced API test failed: ${error.message}</p>`;
+                testResults.advanced = { success: false, error: error.message };
+                updateTestStatus('test-advanced', 'error', `Advanced API failed: ${error.message}`);
+            }
+        }
+
+        // Test 8: Performance Test
+        async function testPerformance() {
+            if (!testFile || !extractorAPI) return;
+            
+            updateTestStatus('test-performance', 'running', 'Running performance tests...');
+            
+            try {
+                const fileSizeMB = Math.round(testFile.size / (1024 * 1024));
+                
+                // Memory usage estimation
+                const memoryBefore = performance.memory ? performance.memory.usedJSHeapSize : 0;
+                
+                // Run multiple operations and measure
+                const results = [];
+                
+                // Test 1: Quick metadata
+                const quickStart = performance.now();
+                await extractorAPI.extractMetadata(testFile);
+                const quickTime = Math.round(performance.now() - quickStart);
+                results.push({ test: 'Metadata', time: quickTime });
+                
+                // Test 2: Video info
+                const infoStart = performance.now();
+                await extractorAPI.getVideoInfo(testFile);
+                const infoTime = Math.round(performance.now() - infoStart);
+                results.push({ test: 'Video Info', time: infoTime });
+                
+                const memoryAfter = performance.memory ? performance.memory.usedJSHeapSize : 0;
+                const memoryUsed = Math.round((memoryAfter - memoryBefore) / (1024 * 1024));
+                
+                // Calculate metrics
+                const avgTime = Math.round(results.reduce((sum, r) => sum + r.time, 0) / results.length);
+                const mbPerSecond = Math.round(fileSizeMB / (avgTime / 1000));
+                
+                document.getElementById('performance-results').innerHTML = `
+                    <div class="metrics">
+                        <span class="metric">⚡ ${avgTime}ms Avg</span>
+                        <span class="metric">📊 ${mbPerSecond} MB/s</span>
+                        <span class="metric">💾 ${memoryUsed}MB Memory</span>
+                    </div>
+                    <details>
+                        <summary>Performance Details</summary>
+                        <ul>
+                            <li>File size: ${fileSizeMB} MB</li>
+                            <li>Average processing time: ${avgTime}ms</li>
+                            <li>Processing speed: ~${mbPerSecond} MB/s</li>
+                            <li>Memory usage: ~${memoryUsed} MB</li>
+                        </ul>
+                        <h4>Individual Tests:</h4>
+                        <ul>
+                            ${results.map(r => `<li>${r.test}: ${r.time}ms</li>`).join('')}
+                        </ul>
+                    </details>
+                `;
+                
+                testResults.performance = {
+                    success: true,
+                    avgTime: avgTime,
+                    mbPerSecond: mbPerSecond,
+                    memoryUsed: memoryUsed,
+                    tests: results
+                };
+                
+                updateTestStatus('test-performance', 'success', `Average processing: ${avgTime}ms (${mbPerSecond} MB/s)`);
+                
+            } catch (error) {
+                document.getElementById('performance-results').innerHTML = `<p style="color: #dc3545;">❌ Performance test failed: ${error.message}</p>`;
+                testResults.performance = { success: false, error: error.message };
+                updateTestStatus('test-performance', 'error', `Performance test failed: ${error.message}`);
+            }
+        }
+
+        // Download functions
+        window.downloadSubtitle = function(filename, data) {
+            const blob = new Blob([data], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            log(`Downloaded: ${filename}`, 'success');
+        };
+
+        window.downloadZip = function() {
+            if (window.batchZipData) {
+                const url = URL.createObjectURL(window.batchZipData.zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = window.batchZipData.zipFilename;
+                a.click();
+                URL.revokeObjectURL(url);
+                log(`Downloaded ZIP: ${window.batchZipData.zipFilename}`, 'success');
+            }
+        };
+
+        // Run all tests
+        window.runAllTests = async function() {
+            if (!testFile) {
+                alert('Please select a video file first');
+                return;
+            }
+            
+            startTime = performance.now();
+            log('Starting comprehensive test suite...', 'info');
+            
+            // Run tests sequentially
+            await testImport();
+            await testStreamDetection();
+            await testMetadata();
+            await testVideoInfo();
+            await testSingleSubtitle();
+            await testBatchSubtitles();
+            await testAdvancedAPI();
+            await testPerformance();
+            
+            // Cleanup
+            if (extractorAPI) {
+                await extractorAPI.cleanup();
+                log('Resources cleaned up', 'success');
+            }
+            
+            const totalTime = Math.round(performance.now() - startTime);
+            
+            // Update summary
+            const successCount = Object.values(testResults).filter(r => r.success).length;
+            const totalTests = Object.keys(testResults).length;
+            
+            document.getElementById('test-summary').innerHTML = `
+                <div class="metrics">
+                    <span class="metric" style="background-color: ${successCount === totalTests ? '#d4edda' : '#f8d7da'};">
+                        ${successCount}/${totalTests} Tests Passed
+                    </span>
+                    <span class="metric">⏱️ ${totalTime}ms Total</span>
+                    <span class="metric">📁 ${Math.round(testFile.size / (1024 * 1024))} MB File</span>
+                </div>
+                <h3>${successCount === totalTests ? '🎉 All Tests Passed!' : '⚠️ Some Tests Failed'}</h3>
+                <p>Complete test suite finished in ${totalTime}ms</p>
+                <details>
+                    <summary>Detailed Results</summary>
+                    <pre>${JSON.stringify(testResults, null, 2)}</pre>
+                </details>
+            `;
+            
+            log(`Test suite completed: ${successCount}/${totalTests} passed in ${totalTime}ms`, 
+                successCount === totalTests ? 'success' : 'warning');
+        };
+
+        // Initialize
+        log('Test suite initialized. Select a video file to begin.', 'info');
+        testImport(); // Import package immediately
+    </script>
+</body>
+</html>

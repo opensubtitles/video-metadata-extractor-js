@@ -25,6 +25,12 @@ import {
   downloadLargeFile,
   getFormatFromFileName 
 } from './utils.js';
+
+// Helper function to get file extension
+const getFileExtension = (filename: string): string => {
+  const extension = filename.split('.').pop()?.toLowerCase();
+  return extension || 'mkv'; // Default to mkv if no extension
+};
 import { 
   PROCESSING_CONSTANTS,
   FFMPEG_CONSTANTS,
@@ -427,7 +433,14 @@ export class VideoMetadataExtractor {
         throw new Error('No subtitle tracks found in this file');
       }
 
+      console.log(`[EXTRACT ALL] Found ${subtitleStreams.length} subtitle streams, extracting all in single operation`);
       await this.cleanupFFmpegFiles();
+
+      // Load the file data once (using optimized chunked processing)
+      const fileBlob = await createCompleteFileDataInChunks(file);
+      const fileData = new Uint8Array(await fileBlob.arrayBuffer());
+      const inputFilename = `input.${getFileExtension(file.name)}`;
+      await this.ffmpeg.writeFile(inputFilename, fileData);
 
       const zip = new JSZip();
       const extractedFiles: Array<{
@@ -438,38 +451,98 @@ export class VideoMetadataExtractor {
         forced?: boolean;
         streamIndex: number;
       }> = [];
-      let successfulExtractions = 0;
 
-      // Extract each subtitle stream
+      // Build single FFmpeg command to extract all subtitles at once
+      const outputFiles: Array<{ filename: string; streamIndex: number; stream: any }> = [];
+      const ffmpegArgs = ['-i', inputFilename];
+
       for (let i = 0; i < subtitleStreams.length; i++) {
         const stream = subtitleStreams[i];
         const streamIndex = stream.index !== undefined ? stream.index : i;
         
-        try {
-          const subtitleResult = await this.extractSubtitle(file, streamIndex, { format: 'srt' });
-          
-          // Generate filename with language and track info
-          let filename = `video`;
-          if (stream.language) filename += `.${stream.language}`;
-          if (subtitleStreams.filter(s => s.language === stream.language).length > 1) {
-            filename += `.${streamIndex}`;
+        // Generate filename with language and track info
+        let filename = `video`;
+        if (stream.language) filename += `.${stream.language}`;
+        if (subtitleStreams.filter(s => s.language === stream.language).length > 1) {
+          filename += `.${streamIndex}`;
+        }
+        filename += '.srt';
+        
+        outputFiles.push({ filename, streamIndex, stream });
+        
+        // Add mapping for this subtitle stream to SRT format
+        ffmpegArgs.push('-map', `0:${streamIndex}`, '-c:s', 'srt', `${filename}`);
+      }
+
+      console.log(`[EXTRACT ALL] Running single FFmpeg command for ${subtitleStreams.length} streams:`, ffmpegArgs.join(' '));
+      
+      // Execute single FFmpeg operation for all subtitles
+      let successfulExtractions = 0;
+      try {
+        await this.ffmpeg.exec(ffmpegArgs);
+        
+        // Read all extracted files
+        for (const { filename, streamIndex, stream } of outputFiles) {
+          try {
+            const data = await this.ffmpeg.readFile(filename) as Uint8Array;
+            
+            if (data.length > 0) {
+              extractedFiles.push({
+                filename: filename,
+                data: data,
+                size: data.length,
+                language: stream.language,
+                forced: stream.forced,
+                streamIndex: streamIndex
+              });
+              
+              zip.file(filename, data);
+              successfulExtractions++;
+              console.log(`[EXTRACT ALL] Successfully extracted ${filename} (${data.length} bytes)`);
+            } else {
+              console.warn(`[EXTRACT ALL] Empty subtitle file for stream ${streamIndex}`);
+            }
+          } catch (readError) {
+            console.warn(`[EXTRACT ALL] Failed to read subtitle file ${filename}:`, readError);
+            // Continue with other streams
           }
-          filename += `.srt`;
+        }
+        
+      } catch (ffmpegError) {
+        console.error(`[EXTRACT ALL] FFmpeg batch extraction failed:`, ffmpegError);
+        
+        // Fallback to individual extraction if batch fails
+        console.log(`[EXTRACT ALL] Falling back to individual extraction`);
+        for (let i = 0; i < subtitleStreams.length; i++) {
+          const stream = subtitleStreams[i];
+          const streamIndex = stream.index !== undefined ? stream.index : i;
           
-          extractedFiles.push({
-            filename: filename,
-            data: subtitleResult.data,
-            size: subtitleResult.size,
-            language: stream.language,
-            forced: stream.forced,
-            streamIndex: streamIndex
-          });
-          
-          zip.file(filename, subtitleResult.data);
-          successfulExtractions++;
-        } catch (streamError) {
-          console.warn(`Failed to extract subtitle stream ${streamIndex}:`, streamError);
-          // Continue with other streams
+          try {
+            const subtitleResult = await this.extractSubtitle(file, streamIndex, { format: 'srt' });
+            
+            // Generate filename with language and track info
+            let filename = `video`;
+            if (stream.language) filename += `.${stream.language}`;
+            if (subtitleStreams.filter(s => s.language === stream.language).length > 1) {
+              filename += `.${streamIndex}`;
+            }
+            filename += `.srt`;
+            
+            extractedFiles.push({
+              filename: filename,
+              data: subtitleResult.data,
+              size: subtitleResult.size,
+              language: stream.language,
+              forced: stream.forced,
+              streamIndex: streamIndex
+            });
+            
+            zip.file(filename, subtitleResult.data);
+            successfulExtractions++;
+          } catch (streamError) {
+            console.warn(`Failed to extract subtitle stream ${streamIndex}:`, streamError);
+            // Continue with other streams
+          }
         }
       }
 

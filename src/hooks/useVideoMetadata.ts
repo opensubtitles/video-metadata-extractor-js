@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { toBlobURL, fetchFile } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
+import { cachedToBlobURL } from '../utils/ffmpegCache.js';
 import { VideoMetadata, ProgressState, ErrorState } from '../types/index.js';
 import JSZip from 'jszip';
 
@@ -805,8 +806,8 @@ export const useVideoMetadata = () => {
         const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
         
         await ffmpeg.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+          coreURL: await cachedToBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await cachedToBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
         });
         
         setIsLoaded(true);
