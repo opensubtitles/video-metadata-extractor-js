@@ -339,13 +339,52 @@ function setStatus(msg: string): void {
   if (el) el.textContent = msg;
 }
 
+let lastLogMessage = '';
+let lastLogCount = 0;
 function appendLog(msg: string): void {
   const el = $('event-log');
   if (!el) return;
+  // Dedup consecutive identical messages so 43 worker "Output #" lines don't
+  // bury everything else. Show a counter when a message repeats.
+  if (msg === lastLogMessage) {
+    lastLogCount++;
+    const ts = new Date().toISOString().slice(11, 19);
+    const current = el.textContent ?? '';
+    const firstNewline = current.indexOf('\n');
+    const rest = firstNewline >= 0 ? current.slice(firstNewline + 1) : '';
+    el.textContent = `[${ts}] ${msg}  (x${lastLogCount + 1})\n` + rest;
+    return;
+  }
+  lastLogMessage = msg;
+  lastLogCount = 0;
   const ts = new Date().toISOString().slice(11, 19);
   el.textContent = `[${ts}] ${msg}\n` + (el.textContent ?? '');
   if ((el.textContent?.length ?? 0) > 20000) {
     el.textContent = el.textContent!.slice(0, 20000);
+  }
+}
+
+let runningTimer: ReturnType<typeof setInterval> | null = null;
+let runningStartedAt = 0;
+let runningLabel = '';
+function startRunningIndicator(label: string): void {
+  runningLabel = label;
+  runningStartedAt = performance.now();
+  if (runningTimer) clearInterval(runningTimer);
+  const tick = () => {
+    const el = $('status');
+    if (!el) return;
+    const elapsedSec = Math.floor((performance.now() - runningStartedAt) / 1000);
+    const spinner = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'[elapsedSec % 10];
+    el.textContent = `${spinner} ${runningLabel} — ${elapsedSec}s elapsed`;
+  };
+  tick();
+  runningTimer = setInterval(tick, 250);
+}
+function stopRunningIndicator(): void {
+  if (runningTimer) {
+    clearInterval(runningTimer);
+    runningTimer = null;
   }
 }
 
@@ -388,20 +427,23 @@ function busy(flag: boolean): void {
 
 async function uiRunChunkedTest(mode: 'file' | 'synthetic'): Promise<void> {
   busy(true);
-  setStatus(`Running chunked processing test (${mode})...`);
+  startRunningIndicator(`Chunked processing test (${mode})`);
   appendLog(`Chunked test started (mode=${mode})`);
   try {
     const f = mode === 'file' ? currentFile() : null;
     if (mode === 'file' && !f) {
+      stopRunningIndicator();
       setStatus('Pick a video file first.');
       appendLog('No file selected — abort.');
       return;
     }
     const result = await runChunkedTest(mode, f, (t) => appendLog(t));
+    stopRunningIndicator();
     renderJson('chunked-result', result);
-    setStatus(result.ok ? `✅ PASS — all assertions hold` : `❌ FAIL — see result panel`);
+    setStatus(result.ok ? `✅ PASS — all assertions hold (${(result.durationMs / 1000).toFixed(2)}s)` : `❌ FAIL — see result panel`);
     appendLog(`Chunked test done in ${(result.durationMs / 1000).toFixed(2)}s, peak heap ${result.peakHeapBytes === null ? 'n/a' : mbStr(result.peakHeapBytes)}`);
   } catch (e) {
+    stopRunningIndicator();
     setStatus(`Error: ${(e as Error).message}`);
     appendLog(`ERROR: ${(e as Error).message}`);
   } finally {
@@ -416,14 +458,17 @@ async function uiRunMetadata(): Promise<void> {
     return;
   }
   busy(true);
-  setStatus(`Extracting metadata from ${gbStr(f.size)}...`);
+  startRunningIndicator(`Extracting metadata from ${gbStr(f.size)}`);
   appendLog(`Metadata extraction started on ${f.name}`);
   try {
     const metadata = await runMetadataExtraction(f, (t) => appendLog(t));
+    stopRunningIndicator();
     renderJson('metadata-result', metadata);
-    setStatus(`Metadata extracted (${metadata.streams?.length ?? 0} streams)`);
+    const subCount = metadata.streams?.filter((s) => s.codecType === 'subtitle').length ?? 0;
+    setStatus(`✅ Metadata extracted — ${metadata.streams?.length ?? 0} streams (${subCount} subtitles)`);
     appendLog('Metadata extraction done');
   } catch (e) {
+    stopRunningIndicator();
     setStatus(`Error: ${(e as Error).message}`);
     appendLog(`ERROR: ${(e as Error).message}`);
   } finally {
@@ -438,10 +483,11 @@ async function uiRunSubtitles(): Promise<void> {
     return;
   }
   busy(true);
-  setStatus(`Extracting all subtitle tracks from ${gbStr(f.size)} — be patient on big files...`);
+  startRunningIndicator(`Extracting all subtitle tracks from ${gbStr(f.size)}`);
   appendLog(`Subtitle extraction started on ${f.name}`);
   try {
     const report = await runSubtitleExtraction(f, (t) => appendLog(t));
+    stopRunningIndicator();
     renderJson('subtitle-result', report);
     renderSubtitleList(report);
     setStatus(
@@ -451,6 +497,7 @@ async function uiRunSubtitles(): Promise<void> {
     );
     appendLog('Subtitle extraction done');
   } catch (e) {
+    stopRunningIndicator();
     setStatus(`Error: ${(e as Error).message}`);
     appendLog(`ERROR: ${(e as Error).message}`);
   } finally {

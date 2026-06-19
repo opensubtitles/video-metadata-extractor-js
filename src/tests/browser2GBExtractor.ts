@@ -322,16 +322,66 @@ export async function extractAllSubtitlesWorkerFS(
   onProgress?.(`Spawning ffmpeg worker, ${subtitleStreams.length} subtitle streams…`, 5);
   sampleHeap();
 
+  // Throttle progress updates and surface real ffmpeg activity. Without this
+  // the worker bursts ~43 "Output #" lines in the first second and then runs
+  // silently for ~50s on a 13GB MKV — the page looks dead.
+  let lastUpdate = 0;
+  let outputsSeen = 0;
+  let lastTimeStr = '';
+  // Duration in seconds (best effort) — used to estimate percent through.
+  const durationSec = (() => {
+    const d = parseFloat(meta.duration);
+    return Number.isFinite(d) && d > 0 ? d : 0;
+  })();
+  const minIntervalMs = 250;
+  const tickProgress = (text: string, percent?: number) => {
+    const now = performance.now();
+    if (now - lastUpdate < minIntervalMs) return;
+    lastUpdate = now;
+    onProgress?.(text, percent);
+  };
+
   const { memfs, stderr } = await runWorker(
     FFMPEG_WORKER,
     args,
     file,
     (line) => {
-      // Surface meaningful progress when ffmpeg prints output filenames.
-      if (line.includes('Output #')) onProgress?.('Writing output streams…', 50);
+      if (line.includes('Output #')) {
+        outputsSeen++;
+        tickProgress(
+          `Preparing output streams (${outputsSeen}/${subtitleStreams.length})…`,
+          5 + Math.round((outputsSeen / subtitleStreams.length) * 10),
+        );
+        return;
+      }
+      // ffmpeg emits "size= ... time=HH:MM:SS.xx ... speed=Nx" while
+      // demuxing. We surface time= as real progress and compute percent
+      // against the file's duration. This is the heartbeat that makes the
+      // page feel alive during the long demux pass.
+      const timeMatch = line.match(/time=(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?/);
+      if (timeMatch) {
+        const [, hh, mm, ss, frac] = timeMatch;
+        const elapsed =
+          parseInt(hh, 10) * 3600 +
+          parseInt(mm, 10) * 60 +
+          parseInt(ss, 10) +
+          (frac ? parseInt(frac.padEnd(3, '0'), 10) / 1000 : 0);
+        const timeStr = `${hh}:${mm}:${ss}`;
+        if (timeStr !== lastTimeStr) {
+          lastTimeStr = timeStr;
+          const speedMatch = line.match(/speed=\s*([\d.]+)x/);
+          const speed = speedMatch ? `${speedMatch[1]}x` : '';
+          const percent =
+            durationSec > 0
+              ? Math.min(95, 20 + Math.round((elapsed / durationSec) * 75))
+              : undefined;
+          tickProgress(`Demuxing… t=${timeStr}${speed ? ` ${speed}` : ''}`, percent);
+        }
+      }
     },
   );
   sampleHeap();
+  onProgress?.('Reading output buffers from worker…', 96);
 
   const extracted: SubtitleFile[] = [];
   for (const { name, stream } of outputs) {
