@@ -46,6 +46,20 @@ export {
   type BatchExtractionResult
 } from './VideoMetadataExtractor.js';
 
+// MKV/WebM fast-path subtitle extractor — pure-JS Matroska parser.
+// Handles files of any size, including past the 2GB browser Blob limit.
+// 3-4x faster than the FFmpeg WORKERFS path on the same file, byte-identical
+// SubRip output to `ffmpeg -map 0:N -c:s copy`. See MkvFastExtractor.ts for
+// implementation notes.
+export {
+  extractMkvSubtitlesFast,
+  isMatroska,
+  type MkvFastReport,
+  type MkvSubtitleTrack,
+  type MkvSubtitleEntry,
+  type MkvFastExtractedFile
+} from './MkvFastExtractor.js';
+
 // Utility functions
 export {
   generateSubtitleFilename,

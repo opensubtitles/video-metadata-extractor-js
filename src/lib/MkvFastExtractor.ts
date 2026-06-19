@@ -133,12 +133,6 @@ function readUint(buf: Uint8Array, offset: number, len: number): number {
   return v;
 }
 
-function readUintBig(buf: Uint8Array, offset: number, len: number): bigint {
-  let v = 0n;
-  for (let i = 0; i < len; i++) v = (v << 8n) | BigInt(buf[offset + i]);
-  return v;
-}
-
 function readSint16(buf: Uint8Array, offset: number): number {
   const v = (buf[offset] << 8) | buf[offset + 1];
   return v & 0x8000 ? v - 0x10000 : v;

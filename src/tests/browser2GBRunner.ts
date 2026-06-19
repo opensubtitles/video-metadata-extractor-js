@@ -31,7 +31,7 @@ import {
   extractMkvSubtitlesFast,
   isMatroska,
   type MkvFastReport,
-} from './browser2GBMkvFast';
+} from '../lib/MkvFastExtractor';
 
 // ---------- types -------------------------------------------------------
 

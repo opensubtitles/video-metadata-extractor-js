@@ -1,6 +1,6 @@
 {
   "name": "@opensubtitles/video-metadata-extractor",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "A comprehensive NPM package for video metadata extraction and subtitle processing using FFmpeg WASM. Supports metadata extraction, individual subtitle extraction, batch subtitle extraction with ZIP downloads, and memory-safe processing of files of any size using chunked streaming.",
   "main": "dist/lib/lib/index.js",
   "module": "dist/lib/lib/index.js",
@@ -26,6 +26,10 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci --coverage --watchAll=false",
+    "test:browser-2gb": "npx ts-node --esm tests/automation/real-2gb-browser.test.ts",
+    "test:browser-2gb:chrome": "PRODUCT=chrome npm run test:browser-2gb",
+    "test:browser-2gb:firefox": "PRODUCT=firefox npm run test:browser-2gb",
+    "test:browser-2gb:synthetic": "MODE=synthetic npm run test:browser-2gb",
     "version:sync": "node scripts/update-version.js",
     "build:npm": "tsc --project tsconfig.npm.json",
     "prepublishOnly": "npm run version:sync && npm run lint && npm run build:npm"
@@ -66,6 +70,7 @@
     "@testing-library/user-event": "^14.5.2",
     "@types/jest": "^29.5.14",
     "@types/jszip": "^3.4.0",
+    "@types/puppeteer": "^5.4.7",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
@@ -74,6 +79,7 @@
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "postcss": "^8.5.6",
+    "puppeteer": "^24.31.0",
     "tailwindcss": "^4.1.11",
     "ts-jest": "^29.2.5",
     "typescript": "^5.8.3",
@@ -82,6 +88,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "async-mutex": "^0.5.0",
     "buffer": "^6.0.3",
     "jszip": "^3.10.1",
     "mp4box": "^1.4.2",
