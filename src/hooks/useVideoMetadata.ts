@@ -4,6 +4,7 @@ import { fetchFile } from '@ffmpeg/util';
 import { cachedToBlobURL } from '../utils/ffmpegCache.js';
 import { VideoMetadata, ProgressState, ErrorState } from '../types/index.js';
 import JSZip from 'jszip';
+import { extractMkvSubtitlesFast, isMatroska } from '../lib/MkvFastExtractor.js';
 
 // Helper function to get file format from filename
 const getFormatFromFileName = (filename: string): string => {
@@ -1434,9 +1435,34 @@ export const useVideoMetadata = () => {
       showProgress(`Preparing to extract all subtitles...`, 5);
       await new Promise(resolve => setTimeout(resolve, 100));
 
+      // Fast path: MKV/WebM containers go through the pure-JS Matroska
+      // parser. FFmpeg's MEMFS path below copies the whole file into the
+      // WASM heap and dies at ~2GB with "File could not be read! Code=-1".
+      // The fast path streams via File.slice(), so a 13GB MKV works the
+      // same as a 100MB one. SubRip output is byte-identical to
+      // `ffmpeg -map 0:N -c:s copy`.
+      if (await isMatroska(file)) {
+        console.log(`[EXTRACT ALL DEBUG] MKV fast path for ${file.name}`);
+        const report = await extractMkvSubtitlesFast(file, (text, percent) => {
+          showProgress(text, percent ?? 50);
+        });
+        if (report.errors.length > 0) {
+          console.warn('[EXTRACT ALL DEBUG] MKV fast path warnings:', report.errors);
+        }
+        if (report.extractedCount === 0) {
+          showError(`MKV fast path produced no subtitles: ${report.errors.join('; ') || 'unknown reason'}`);
+          return;
+        }
+        showProgress(
+          `Extracted ${report.extractedCount}/${report.totalSubtitleStreams} subtitle tracks → ${report.zipFilename} (${(report.zipSize / 1024).toFixed(1)}KB) in ${(report.durationMs / 1000).toFixed(1)}s`,
+          100,
+        );
+        return;
+      }
+
       // Get all subtitle streams
       const subtitleStreams = metadata.streams?.filter(stream => stream.codec_type === 'subtitle') || [];
-      
+
       if (subtitleStreams.length === 0) {
         showProgress(`No subtitle tracks found in this file.`, 100);
         return;
