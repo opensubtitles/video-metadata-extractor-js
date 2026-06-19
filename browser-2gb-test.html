@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/video-metadata-extractor-js/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2GB+ Browser Test — Video Metadata Extractor</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: #0f1115;
+        color: #e6e6e6;
+        margin: 0;
+        padding: 24px;
+        line-height: 1.45;
+      }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      h2 { font-size: 16px; margin: 22px 0 8px; color: #9cc; border-bottom: 1px solid #233; padding-bottom: 4px; }
+      a { color: #8cf; }
+      .lead { color: #aaa; margin: 0 0 18px; }
+      .panel {
+        background: #161a22;
+        border: 1px solid #243049;
+        border-radius: 6px;
+        padding: 14px 16px;
+        margin-bottom: 14px;
+      }
+      .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+      button {
+        background: #2a4d7a;
+        color: white;
+        border: none;
+        padding: 8px 14px;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      button:hover:not(:disabled) { background: #356dab; }
+      button:disabled { background: #333; color: #777; cursor: not-allowed; }
+      input[type="file"] {
+        background: #1d2533;
+        color: #e6e6e6;
+        border: 1px solid #2a3a55;
+        padding: 6px 8px;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 13px;
+      }
+      pre {
+        background: #0a0d12;
+        border: 1px solid #1d2533;
+        border-radius: 4px;
+        padding: 10px 12px;
+        overflow: auto;
+        max-height: 360px;
+        font-size: 12px;
+        line-height: 1.4;
+        margin: 6px 0 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+      th, td { padding: 6px 8px; border-bottom: 1px solid #243049; text-align: left; }
+      th { color: #9cc; font-weight: 600; }
+      tr:hover td { background: #11151c; }
+      #status {
+        background: #1c2533;
+        border-left: 3px solid #4af;
+        padding: 8px 12px;
+        margin-bottom: 14px;
+        font-size: 13px;
+      }
+      .note { color: #b9b; font-size: 12px; }
+      footer { margin-top: 28px; font-size: 12px; color: #777; }
+    </style>
+  </head>
+  <body>
+    <h1>2GB+ Browser Test</h1>
+    <p class="lead">
+      Genuinely verifies chunked file processing, metadata extraction, and full subtitle extraction
+      against video files of any size — including files past the 2GB browser <code>Blob</code> limit.
+      No mocks, no synthetic <code>File.size</code> overrides. Drop in a real multi-GB MKV and watch
+      it work. <a href="/video-metadata-extractor-js/">← back to main demo</a>
+    </p>
+
+    <div id="env-info" class="note">detecting environment…</div>
+    <div id="status">loading runner…</div>
+
+    <div class="panel">
+      <h2>1. File</h2>
+      <input type="file" id="big2gb-file" accept="video/*" />
+      <pre id="file-info">No file selected.</pre>
+      <p class="note">
+        Files stay 100% on your machine — nothing is uploaded. The browser slices the file lazily
+        from disk via <code>File.slice()</code>, so picking a 14GB MKV does not load 14GB into RAM.
+      </p>
+    </div>
+
+    <div class="panel">
+      <h2>2. Chunked Processing Test</h2>
+      <p class="note">
+        Runs <code>FileProcessor.processInChunks</code> with 500MB chunks, reads the first byte
+        of every slice (forces real disk read), samples <code>performance.memory.usedJSHeapSize</code>
+        per chunk (Chrome only), and asserts: file size &gt; 2GB, large-file flag, non-quick strategy,
+        all chunks processed, peak heap under 1GB.
+      </p>
+      <div class="controls">
+        <button data-action="chunked-file">Run on selected file</button>
+        <button data-action="chunked-synthetic">Run on synthetic 2.1GB (OPFS)</button>
+      </div>
+      <pre id="chunked-result">(no result yet)</pre>
+    </div>
+
+    <div class="panel">
+      <h2>3. Metadata Extraction</h2>
+      <p class="note">
+        Boots FFmpeg WASM (≈32MB on first run, cached after) and runs
+        <code>VideoMetadataExtractor.extractMetadata</code> against the selected file —
+        reads only the format/streams metadata, not the whole file.
+      </p>
+      <div class="controls">
+        <button data-action="metadata">Extract metadata</button>
+      </div>
+      <pre id="metadata-result">(no result yet)</pre>
+    </div>
+
+    <div class="panel">
+      <h2>4. Subtitle Extraction (all tracks → ZIP)</h2>
+      <p class="note">
+        Calls <code>VideoMetadataExtractor.extractAllSubtitles</code> end-to-end: enumerates
+        subtitle streams, extracts each one via FFmpeg WASM, packages them into a ZIP, and
+        triggers download. Honors the 2GB <code>Blob</code> browser limit via the lib's
+        chunked-streaming path. On a 14GB MKV this takes several minutes — keep the tab open.
+      </p>
+      <div class="controls">
+        <button data-action="subtitles">Extract all subtitles → ZIP</button>
+      </div>
+      <div id="subtitle-list"></div>
+      <pre id="subtitle-result">(no result yet)</pre>
+    </div>
+
+    <div class="panel">
+      <h2>Event log</h2>
+      <pre id="event-log">(empty)</pre>
+    </div>
+
+    <footer>
+      Source: <a href="https://github.com/opensubtitles/video-metadata-extractor-js">opensubtitles/video-metadata-extractor-js</a> ·
+      Runner: <code>src/tests/browser2GBRunner.ts</code> ·
+      Puppeteer driver: <code>tests/automation/real-2gb-browser.test.ts</code>
+    </footer>
+
+    <script type="module" src="/src/tests/browser2GBRunner.ts"></script>
+  </body>
+</html>

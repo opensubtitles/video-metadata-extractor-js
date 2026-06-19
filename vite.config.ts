@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -27,6 +28,10 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        big2gb: resolve(__dirname, 'browser-2gb-test.html'),
+      },
       output: {
         manualChunks: {
           'ffmpeg': ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
