@@ -33,6 +33,9 @@ const CONFIG = {
   downloadsDir: process.env.DOWNLOADS_DIR || '/tmp/big2gb-browser-out',
   headless: process.env.HEADLESS !== 'false',
   timeoutMs: parseInt(process.env.TIMEOUT || '1800000', 10),
+  // 'ffmpeg' (default) drives the WORKERFS ffmpeg path; 'mkvfast' drives
+  // the pure-JS Matroska parser.
+  mode: (process.env.MODE || 'ffmpeg') as 'ffmpeg' | 'mkvfast',
 };
 
 function sha256File(p: string): string {
@@ -169,19 +172,28 @@ async function run(): Promise<void> {
     console.log('  uploading file path…');
     await (input as unknown as { uploadFile: (p: string) => Promise<void> }).uploadFile(CONFIG.testFile);
 
-    console.log('  ▶ probing metadata via WORKERFS…');
-    const meta = (await page.evaluate(async () => {
-      const w = window as unknown as { __runBig2GBMetadata: () => Promise<unknown> };
-      return await w.__runBig2GBMetadata();
-    })) as MetaResult;
-    console.log(`    format=${meta.format} duration=${meta.duration} bitrate=${meta.bitrate}`);
-    console.log(`    streamCount=${meta.streamCount} subtitleCount=${meta.subtitleCount}`);
+    let subs: SubsResult;
+    if (CONFIG.mode === 'mkvfast') {
+      console.log('  ▶ extracting all subtitles via MKV fast path (pure JS, no FFmpeg)…');
+      subs = (await page.evaluate(async () => {
+        const w = window as unknown as { __runBig2GBMkvFast: () => Promise<unknown> };
+        return await w.__runBig2GBMkvFast();
+      })) as SubsResult;
+    } else {
+      console.log('  ▶ probing metadata via WORKERFS…');
+      const meta = (await page.evaluate(async () => {
+        const w = window as unknown as { __runBig2GBMetadata: () => Promise<unknown> };
+        return await w.__runBig2GBMetadata();
+      })) as MetaResult;
+      console.log(`    format=${meta.format} duration=${meta.duration} bitrate=${meta.bitrate}`);
+      console.log(`    streamCount=${meta.streamCount} subtitleCount=${meta.subtitleCount}`);
 
-    console.log('  ▶ extracting all subtitles via WORKERFS (single ffmpeg pass)…');
-    const subs = (await page.evaluate(async () => {
-      const w = window as unknown as { __runBig2GBSubtitles: () => Promise<unknown> };
-      return await w.__runBig2GBSubtitles();
-    })) as SubsResult;
+      console.log('  ▶ extracting all subtitles via WORKERFS (single ffmpeg pass)…');
+      subs = (await page.evaluate(async () => {
+        const w = window as unknown as { __runBig2GBSubtitles: () => Promise<unknown> };
+        return await w.__runBig2GBSubtitles();
+      })) as SubsResult;
+    }
 
     console.log('\n=== BROWSER RESULT ===');
     console.log(`  totalSubtitleStreams: ${subs.totalSubtitleStreams}`);

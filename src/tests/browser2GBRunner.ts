@@ -27,6 +27,11 @@ import {
   type MetadataReport,
   type BatchSubtitleReport,
 } from './browser2GBExtractor';
+import {
+  extractMkvSubtitlesFast,
+  isMatroska,
+  type MkvFastReport,
+} from './browser2GBMkvFast';
 
 // ---------- types -------------------------------------------------------
 
@@ -66,9 +71,11 @@ declare global {
     __big2gbResult?: Big2GBResult;
     __big2gbMetaResult?: MetadataReport;
     __big2gbSubsResult?: BatchSubtitleReport;
+    __big2gbMkvFastResult?: MkvFastReport;
     __runBig2GBTest: (mode: 'file' | 'synthetic') => Promise<Big2GBResult>;
     __runBig2GBMetadata: () => Promise<MetadataReport>;
     __runBig2GBSubtitles: () => Promise<BatchSubtitleReport>;
+    __runBig2GBMkvFast: () => Promise<MkvFastReport>;
   }
 }
 
@@ -304,6 +311,33 @@ async function automationMetadata(): Promise<MetadataReport> {
   return meta;
 }
 
+async function automationMkvFast(): Promise<MkvFastReport> {
+  const file = selectedAutomationFile();
+  if (!(await isMatroska(file))) {
+    throw new Error(`not an MKV/WebM file (EBML magic absent): ${file.name}`);
+  }
+  const report = await extractMkvSubtitlesFast(file, (text, percent) =>
+    console.log('[big2gb:mkvfast] ' + text + (percent !== undefined ? ` (${percent}%)` : '')),
+  );
+  window.__big2gbMkvFastResult = report;
+  console.log('BIG2GB_MKVFAST_RESULT:' + JSON.stringify({
+    ok: report.ok,
+    fileName: report.fileName,
+    fileSize: report.fileSize,
+    totalSubtitleStreams: report.totalSubtitleStreams,
+    extractedCount: report.extractedCount,
+    skippedBitmapCount: report.skippedBitmapCount,
+    durationMs: report.durationMs,
+    bytesRead: report.bytesRead,
+    peakHeapBytes: report.peakHeapBytes,
+    zipFilename: report.zipFilename,
+    zipSize: report.zipSize,
+    extracted: report.extracted,
+    errors: report.errors,
+  }));
+  return report;
+}
+
 async function automationSubtitles(): Promise<BatchSubtitleReport> {
   const file = selectedAutomationFile();
   const report = await runSubtitleExtraction(file, (t) => console.log('[big2gb:sub] ' + t));
@@ -327,6 +361,7 @@ async function automationSubtitles(): Promise<BatchSubtitleReport> {
 window.__runBig2GBTest = automationChunked;
 window.__runBig2GBMetadata = automationMetadata;
 window.__runBig2GBSubtitles = automationSubtitles;
+window.__runBig2GBMkvFast = automationMkvFast;
 
 // ---------- UI wiring (manual mode) ------------------------------------
 
@@ -391,6 +426,28 @@ function stopRunningIndicator(): void {
 function renderJson(target: string, data: unknown): void {
   const el = $(target);
   if (el) el.textContent = JSON.stringify(data, null, 2);
+}
+
+function renderMkvFastList(report: MkvFastReport): void {
+  const el = $('mkvfast-list');
+  if (!el) return;
+  if (!report.extracted.length) {
+    el.innerHTML = '<em>No subtitles extracted.</em>';
+    return;
+  }
+  const rows = report.extracted
+    .map(
+      (s, i) =>
+        `<tr><td>${i + 1}</td><td>${s.streamIndex}</td><td>${s.language ?? '—'}</td><td>${s.title ?? ''}</td><td>${s.codec}</td><td>${s.size.toLocaleString()} B</td><td><code>${s.sha256.slice(0, 12)}…</code></td><td>${s.filename}</td></tr>`,
+    )
+    .join('');
+  el.innerHTML = `
+    <table>
+      <thead><tr><th>#</th><th>Track</th><th>Lang</th><th>Title</th><th>Codec</th><th>Size</th><th>sha256</th><th>Filename</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p>ZIP: <strong>${report.zipFilename}</strong> (${mbStr(report.zipSize)}). Read ${(report.bytesRead / 1024 / 1024).toFixed(1)}MB of ${(report.fileSize / 1024 ** 3).toFixed(2)}GB.</p>
+  `;
 }
 
 function renderSubtitleList(report: BatchSubtitleReport): void {
@@ -476,6 +533,40 @@ async function uiRunMetadata(): Promise<void> {
   }
 }
 
+async function uiRunMkvFast(): Promise<void> {
+  const f = currentFile();
+  if (!f) {
+    setStatus('Pick a video file first.');
+    return;
+  }
+  if (!(await isMatroska(f))) {
+    setStatus('❌ Fast path only supports MKV/WebM (EBML container).');
+    appendLog('MKV fast path requires Matroska/WebM container.');
+    return;
+  }
+  busy(true);
+  startRunningIndicator(`MKV fast-path extracting subtitles from ${gbStr(f.size)}`);
+  appendLog(`MKV fast extraction started on ${f.name}`);
+  try {
+    const report = await extractMkvSubtitlesFast(f, (t) => appendLog('[mkvfast] ' + t));
+    stopRunningIndicator();
+    renderJson('mkvfast-result', report);
+    renderMkvFastList(report);
+    setStatus(
+      report.ok
+        ? `✅ MKV fast path — ${report.extractedCount}/${report.totalSubtitleStreams} subtitle tracks in ${(report.durationMs / 1000).toFixed(2)}s (read ${(report.bytesRead / 1024 / 1024).toFixed(0)}MB of ${(report.fileSize / 1024 ** 3).toFixed(2)}GB)`
+        : `❌ MKV fast path partial — got ${report.extractedCount}/${report.totalSubtitleStreams}`,
+    );
+    appendLog(`MKV fast extraction done in ${(report.durationMs / 1000).toFixed(2)}s`);
+  } catch (e) {
+    stopRunningIndicator();
+    setStatus(`Error: ${(e as Error).message}`);
+    appendLog(`ERROR: ${(e as Error).message}`);
+  } finally {
+    busy(false);
+  }
+}
+
 async function uiRunSubtitles(): Promise<void> {
   const f = currentFile();
   if (!f) {
@@ -531,6 +622,9 @@ function wireUi(): void {
     btn.addEventListener('click', () => {
       const a = btn.dataset.action;
       switch (a) {
+        case 'mkv-fast':
+          void uiRunMkvFast();
+          break;
         case 'chunked-file':
           void uiRunChunkedTest('file');
           break;
