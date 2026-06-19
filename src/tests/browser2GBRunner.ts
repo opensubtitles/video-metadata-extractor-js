@@ -21,8 +21,12 @@ import {
   getRecommendedProcessingStrategy,
 } from '../utils/fileProcessor';
 import { PROCESSING_CONSTANTS } from '../constants/index';
-import { VideoMetadataExtractor } from '../lib/VideoMetadataExtractor';
-import type { VideoMetadata } from '../types/index';
+import {
+  extractMetadataWorkerFS,
+  extractAllSubtitlesWorkerFS,
+  type MetadataReport,
+  type BatchSubtitleReport,
+} from './browser2GBExtractor';
 
 // ---------- types -------------------------------------------------------
 
@@ -57,32 +61,14 @@ export interface Big2GBResult {
   assertions: Big2GBAssertions;
 }
 
-interface SubtitleSummary {
-  filename: string;
-  size: number;
-  language?: string;
-  forced?: boolean;
-  streamIndex: number;
-}
-
-interface SubtitleExtractionReport {
-  ok: boolean;
-  fileName: string;
-  fileSize: number;
-  totalStreams: number;
-  successfulExtractions: number;
-  durationMs: number;
-  peakHeapBytes: number | null;
-  zipFilename: string;
-  zipSize: number;
-  extracted: SubtitleSummary[];
-  errors: string[];
-}
-
 declare global {
   interface Window {
     __big2gbResult?: Big2GBResult;
+    __big2gbMetaResult?: MetadataReport;
+    __big2gbSubsResult?: BatchSubtitleReport;
     __runBig2GBTest: (mode: 'file' | 'synthetic') => Promise<Big2GBResult>;
+    __runBig2GBMetadata: () => Promise<MetadataReport>;
+    __runBig2GBSubtitles: () => Promise<BatchSubtitleReport>;
   }
 }
 
@@ -262,111 +248,85 @@ export async function runChunkedTest(
   return result;
 }
 
-// ---------- metadata extraction ----------------------------------------
+// ---------- metadata extraction (WORKERFS) -----------------------------
 
 export async function runMetadataExtraction(
   file: File,
   onUpdate?: (text: string) => void,
-): Promise<VideoMetadata> {
-  onUpdate?.('Initializing FFmpeg WASM (first run downloads ~32MB core)...');
-  const extractor = new VideoMetadataExtractor({
-    debug: true,
-    onProgress: (p) => onUpdate?.(`${p.text ?? ''} (${p.progress ?? 0}%)`),
+): Promise<MetadataReport> {
+  return extractMetadataWorkerFS(file, (text, percent) => {
+    onUpdate?.(percent !== undefined ? `${text} (${percent}%)` : text);
   });
-  await extractor.initialize();
-  onUpdate?.(`Extracting metadata from ${gbStr(file.size)}...`);
-  const metadata = await extractor.extractMetadata(file);
-  await extractor.terminate();
-  return metadata;
 }
 
-// ---------- subtitle extraction ----------------------------------------
+// ---------- subtitle extraction (WORKERFS, single-pass) ----------------
 
 export async function runSubtitleExtraction(
   file: File,
   onUpdate?: (text: string) => void,
-): Promise<SubtitleExtractionReport> {
-  const errors: string[] = [];
-  const heapSamples: number[] = [];
-  const t0 = performance.now();
-
-  onUpdate?.('Initializing FFmpeg WASM...');
-  const extractor = new VideoMetadataExtractor({
-    debug: true,
-    onProgress: (p) => {
-      const h = sampleHeap();
-      if (h !== null) heapSamples.push(h);
-      onUpdate?.(`${p.text ?? ''} (${p.progress ?? 0}%)`);
-    },
+): Promise<BatchSubtitleReport> {
+  const meta = await extractMetadataWorkerFS(file, (text, percent) => {
+    onUpdate?.(percent !== undefined ? `[metadata] ${text} (${percent}%)` : `[metadata] ${text}`);
   });
-  await extractor.initialize();
-
-  let report: SubtitleExtractionReport;
-  try {
-    onUpdate?.(`Extracting all subtitle tracks from ${gbStr(file.size)} — may take minutes for large files...`);
-    const result = await extractor.extractAllSubtitles(file);
-    const durationMs = performance.now() - t0;
-
-    report = {
-      ok: result.successfulExtractions > 0,
-      fileName: file.name,
-      fileSize: file.size,
-      totalStreams: result.totalStreams,
-      successfulExtractions: result.successfulExtractions,
-      durationMs: +durationMs.toFixed(1),
-      peakHeapBytes: heapSamples.length ? Math.max(...heapSamples) : null,
-      zipFilename: result.zipFilename,
-      zipSize: result.zipBlob.size,
-      extracted: result.extractedFiles.map((f) => ({
-        filename: f.filename,
-        size: f.size,
-        language: f.language,
-        forced: f.forced,
-        streamIndex: f.streamIndex,
-      })),
-      errors,
-    };
-
-    // Trigger ZIP download in the UI
-    const url = URL.createObjectURL(result.zipBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = result.zipFilename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } catch (e) {
-    const durationMs = performance.now() - t0;
-    errors.push((e as Error).message);
-    report = {
-      ok: false,
-      fileName: file.name,
-      fileSize: file.size,
-      totalStreams: 0,
-      successfulExtractions: 0,
-      durationMs: +durationMs.toFixed(1),
-      peakHeapBytes: heapSamples.length ? Math.max(...heapSamples) : null,
-      zipFilename: '',
-      zipSize: 0,
-      extracted: [],
-      errors,
-    };
-  } finally {
-    await extractor.terminate();
-  }
-  return report;
+  return extractAllSubtitlesWorkerFS(file, meta, (text, percent) => {
+    onUpdate?.(percent !== undefined ? `[extract] ${text} (${percent}%)` : `[extract] ${text}`);
+  });
 }
 
 // ---------- Puppeteer-compatible automation entry ----------------------
 
-async function automationEntry(mode: 'file' | 'synthetic'): Promise<Big2GBResult> {
+function selectedAutomationFile(): File {
+  const input = document.getElementById('big2gb-file') as HTMLInputElement | null;
+  const file = input?.files?.[0];
+  if (!file) throw new Error('no file selected — call uploadFile() before invoking automation');
+  return file;
+}
+
+async function automationChunked(mode: 'file' | 'synthetic'): Promise<Big2GBResult> {
   const input = document.getElementById('big2gb-file') as HTMLInputElement | null;
   const file = input?.files?.[0] ?? null;
   return runChunkedTest(mode, file);
 }
 
-window.__runBig2GBTest = automationEntry;
+async function automationMetadata(): Promise<MetadataReport> {
+  const file = selectedAutomationFile();
+  const meta = await runMetadataExtraction(file, (t) => console.log('[big2gb:meta] ' + t));
+  window.__big2gbMetaResult = meta;
+  console.log('BIG2GB_META_RESULT:' + JSON.stringify({
+    fileName: meta.fileName,
+    fileSize: meta.fileSize,
+    format: meta.format,
+    duration: meta.duration,
+    bitrate: meta.bitrate,
+    streamCount: meta.streams.length,
+    subtitleCount: meta.streams.filter((s) => s.codecType === 'subtitle').length,
+  }));
+  return meta;
+}
+
+async function automationSubtitles(): Promise<BatchSubtitleReport> {
+  const file = selectedAutomationFile();
+  const report = await runSubtitleExtraction(file, (t) => console.log('[big2gb:sub] ' + t));
+  window.__big2gbSubsResult = report;
+  console.log('BIG2GB_SUBS_RESULT:' + JSON.stringify({
+    ok: report.ok,
+    fileName: report.fileName,
+    fileSize: report.fileSize,
+    totalSubtitleStreams: report.totalSubtitleStreams,
+    extractedCount: report.extractedCount,
+    durationMs: report.durationMs,
+    peakHeapBytes: report.peakHeapBytes,
+    zipFilename: report.zipFilename,
+    zipSize: report.zipSize,
+    extracted: report.extracted,
+    errors: report.errors,
+  }));
+  return report;
+}
+
+window.__runBig2GBTest = automationChunked;
+window.__runBig2GBMetadata = automationMetadata;
+window.__runBig2GBSubtitles = automationSubtitles;
 
 // ---------- UI wiring (manual mode) ------------------------------------
 
@@ -394,7 +354,7 @@ function renderJson(target: string, data: unknown): void {
   if (el) el.textContent = JSON.stringify(data, null, 2);
 }
 
-function renderSubtitleList(report: SubtitleExtractionReport): void {
+function renderSubtitleList(report: BatchSubtitleReport): void {
   const el = $('subtitle-list');
   if (!el) return;
   if (!report.extracted.length) {
@@ -404,12 +364,12 @@ function renderSubtitleList(report: SubtitleExtractionReport): void {
   const rows = report.extracted
     .map(
       (s, i) =>
-        `<tr><td>${i + 1}</td><td>${s.filename}</td><td>${s.language ?? '—'}</td><td>${s.forced ? 'yes' : ''}</td><td>${mbStr(s.size)}</td><td>${s.streamIndex}</td></tr>`,
+        `<tr><td>${i + 1}</td><td>${s.streamIndex}</td><td>${s.language ?? '—'}</td><td>${s.title ?? ''}</td><td>${s.codec}</td><td>${s.size.toLocaleString()} B</td><td><code>${s.sha256.slice(0, 12)}…</code></td><td>${s.filename}</td></tr>`,
     )
     .join('');
   el.innerHTML = `
     <table>
-      <thead><tr><th>#</th><th>Filename</th><th>Lang</th><th>Forced</th><th>Size</th><th>Stream</th></tr></thead>
+      <thead><tr><th>#</th><th>Stream</th><th>Lang</th><th>Title</th><th>Codec</th><th>Size</th><th>sha256</th><th>Filename</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <p>ZIP: <strong>${report.zipFilename}</strong> (${mbStr(report.zipSize)}) — downloaded automatically.</p>
@@ -486,8 +446,8 @@ async function uiRunSubtitles(): Promise<void> {
     renderSubtitleList(report);
     setStatus(
       report.ok
-        ? `✅ Extracted ${report.successfulExtractions}/${report.totalStreams} subtitle tracks in ${(report.durationMs / 1000).toFixed(1)}s`
-        : `❌ Subtitle extraction failed (see panel)`,
+        ? `✅ Extracted ${report.extractedCount}/${report.totalSubtitleStreams} subtitle tracks in ${(report.durationMs / 1000).toFixed(1)}s`
+        : `❌ Subtitle extraction failed (see panel) — got ${report.extractedCount}/${report.totalSubtitleStreams}`,
     );
     appendLog('Subtitle extraction done');
   } catch (e) {
