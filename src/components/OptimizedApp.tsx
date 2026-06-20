@@ -190,32 +190,45 @@ const OptimizedApp: React.FC = () => {
         }));
 
         try {
-          // Create a progress monitoring interval to track individual subtitle extraction
+          // Mirror the hook's progress (text + percent) into batchProgress so
+          // the user sees real activity during extraction. Handles both the
+          // legacy 'Extracting subtitle N/M' FFmpeg format and the MKV
+          // fast-path format ('Reading clusters… t=... • read/total MB
+          // (NN%) • eta Ns'). Without this mirror the bar was stuck at
+          // 'File 1/1: ... - Starting...' / 0 % for the entire ~18 s
+          // extraction run.
           let progressInterval: NodeJS.Timeout | null = null;
-          
-          // Monitor the hook's progress to update batch progress in real-time
           const startMonitoring = () => {
             progressInterval = setInterval(() => {
               const currentProgress = progressRef.current;
-              // If we can detect individual subtitle progress from the hook, update batch progress
-              if (currentProgress.isVisible && currentProgress.text.includes('Extracting subtitle')) {
-                const match = currentProgress.text.match(/Extracting subtitle (\d+)\/(\d+)/);
-                if (match) {
-                  const currentSub = parseInt(match[1]);
-                  const totalSubs = parseInt(match[2]);
-                  
-                  // Calculate overall progress including this file's progress
-                  const fileProgress = (currentSub / totalSubs) * subtitleStreams.length;
-                  const overallProgress = extractedCount + fileProgress;
-                  
-                  setBatchProgress(prev => ({
-                    ...prev,
-                    text: `File ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name} - Subtitle ${currentSub}/${totalSubs}`,
-                    progress: Math.round((overallProgress / totalSubtitles) * 100)
-                  }));
-                }
+              if (!currentProgress.isVisible || !currentProgress.text) return;
+
+              const subMatch = currentProgress.text.match(/Extracting subtitle (\d+)\/(\d+)/);
+              if (subMatch) {
+                const currentSub = parseInt(subMatch[1], 10);
+                const totalSubs = parseInt(subMatch[2], 10);
+                const fileProgress = (currentSub / totalSubs) * subtitleStreams.length;
+                const overallProgress = extractedCount + fileProgress;
+                setBatchProgress(prev => ({
+                  ...prev,
+                  text: `File ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name} - Subtitle ${currentSub}/${totalSubs}`,
+                  progress: Math.round((overallProgress / totalSubtitles) * 100),
+                }));
+                return;
               }
-            }, 200); // Update every 200ms
+
+              // Generic fallback: surface the hook's text and percent
+              // directly, scaled across the file's share of the total
+              // subtitle count so the overall bar advances proportionally.
+              const fileFrac = Math.min(1, Math.max(0, currentProgress.progress / 100));
+              const fileProgress = fileFrac * subtitleStreams.length;
+              const overallProgress = extractedCount + fileProgress;
+              setBatchProgress(prev => ({
+                ...prev,
+                text: `File ${fileIndex + 1}/${mkvFiles.length}: ${currentProgress.text}`,
+                progress: Math.round((overallProgress / totalSubtitles) * 100),
+              }));
+            }, 150);
           };
 
           const stopMonitoring = () => {
@@ -225,28 +238,18 @@ const OptimizedApp: React.FC = () => {
             }
           };
 
-          // Start monitoring
           startMonitoring();
-          
-          // Continuously hide individual progress during extraction
-          const suppressProgressInterval = setInterval(() => {
-            if (progressRef.current.isVisible) {
-              hideProgress();
-            }
-          }, 100);
-          
           try {
             // Extract all subtitles from this file
             console.log(`[BATCH SUBTITLE DEBUG] Starting extractAllSubtitles for file ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name}`);
             await extractAllSubtitles(item.file);
             console.log(`[BATCH SUBTITLE DEBUG] Completed extractAllSubtitles for file ${fileIndex + 1}/${mkvFiles.length}: ${item.file.name}`);
           } finally {
-            // Clean up progress suppression
-            clearInterval(suppressProgressInterval);
+            stopMonitoring();
           }
-          
-          // Stop monitoring
-          stopMonitoring();
+          // Hide any lingering individual-progress modal now that
+          // extraction is done; the batch bar continues to own the UI.
+          hideProgress();
           
           // Clear any errors that might have occurred during extraction
           hideError();
