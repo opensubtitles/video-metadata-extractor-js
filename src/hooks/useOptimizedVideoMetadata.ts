@@ -930,9 +930,14 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
       // Remarkably.Bright.Creatures... MKV.
       if (await isMatroska(file)) {
         console.log(`[EXTRACT ALL DEBUG] MKV fast path for ${file.name}`);
+        // Pin the bar visible up-front so the UI shows activity from t=0,
+        // even before extractMkvSubtitlesFast emits its first onProgress.
+        showProgress(`MKV fast path: starting on ${(file.size / 1024 / 1024 / 1024).toFixed(2)}GB file…`, 1);
+        const mkvStart = performance.now();
         const report = await extractMkvSubtitlesFast(file, (text, percent) => {
           showProgress(text, percent ?? 50);
         });
+        const mkvDurSec = (performance.now() - mkvStart) / 1000;
         if (report.errors.length > 0) {
           console.warn('[EXTRACT ALL DEBUG] MKV fast path warnings:', report.errors);
         }
@@ -941,7 +946,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
           return;
         }
         showProgress(
-          `Extracted ${report.extractedCount}/${report.totalSubtitleStreams} subtitle tracks → ${report.zipFilename} (${(report.zipSize / 1024).toFixed(1)}KB) in ${(report.durationMs / 1000).toFixed(1)}s`,
+          `✅ Extracted ${report.extractedCount}/${report.totalSubtitleStreams} subtitle tracks in ${mkvDurSec.toFixed(1)}s → ${report.zipFilename} (${(report.zipSize / 1024).toFixed(1)} KB) downloaded`,
           100,
         );
         console.log(`[EXTRACT ALL DEBUG] MKV fast path done in ${report.durationMs}ms`);

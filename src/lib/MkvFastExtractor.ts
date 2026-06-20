@@ -548,6 +548,7 @@ export async function extractMkvSubtitlesFast(
   let clusterOffset = firstClusterOffset;
   let clusterCount = 0;
   let lastProgressTick = performance.now();
+  const walkStart = performance.now();
 
   while (clusterOffset < segmentEnd) {
     // Peek cluster header to learn its size
@@ -660,13 +661,26 @@ export async function extractMkvSubtitlesFast(
     sampleHeap();
 
     const now = performance.now();
-    if (now - lastProgressTick > 250) {
+    if (now - lastProgressTick > 150) {
       lastProgressTick = now;
-      const percent = totalDurationMs > 0
-        ? Math.min(95, 10 + Math.round((clusterTimestamp * tickToMs / totalDurationMs) * 85))
-        : undefined;
+      // Two independent progress signals: bytes read against file size, and
+      // playback timestamp against media duration. We use the larger of the
+      // two (capped at 95 %) as the percent so the bar reflects real work
+      // even when one signal is noisy. ETA is wall-time extrapolation from
+      // whichever signal is further along.
+      const byteFrac = file.size > 0 ? rdr.bytesRead / file.size : 0;
+      const timeFrac = totalDurationMs > 0 ? (clusterTimestamp * tickToMs) / totalDurationMs : 0;
+      const frac = Math.max(byteFrac, timeFrac);
+      const percent = Math.min(95, 10 + Math.round(frac * 85));
+      const elapsedSec = (now - walkStart) / 1000;
+      const etaSec = frac > 0.02 ? Math.max(0, (elapsedSec / frac) - elapsedSec) : null;
+      const etaStr = etaSec === null ? '—' : etaSec < 60 ? `${Math.round(etaSec)}s` : `${Math.floor(etaSec / 60)}m${Math.round(etaSec % 60)}s`;
+      const readMB = rdr.bytesRead / 1024 / 1024;
+      const totalMB = file.size / 1024 / 1024;
       onProgress?.(
-        `Cluster ${clusterCount}: t=${formatSrtTime(clusterTimestamp * tickToMs)} read=${(rdr.bytesRead / 1024 / 1024).toFixed(0)}MB`,
+        `Reading clusters… t=${formatSrtTime(clusterTimestamp * tickToMs)}` +
+          ` • ${readMB.toFixed(0)} / ${totalMB.toFixed(0)} MB` +
+          ` (${Math.round(frac * 100)}%) • eta ${etaStr}`,
         percent,
       );
     }
