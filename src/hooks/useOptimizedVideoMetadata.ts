@@ -8,6 +8,7 @@ import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import { cachedToBlobURL } from '../utils/ffmpegCache.js';
 import JSZip from 'jszip';
+import { extractMkvSubtitlesFast, isMatroska } from '../lib/MkvFastExtractor.js';
 
 import { 
   VideoMetadata, 
@@ -913,7 +914,7 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
   const extractAllSubtitles = useCallback(async (file: File) => {
     console.log(`[EXTRACT ALL DEBUG] Starting extractAllSubtitles for: ${file.name}`);
     console.log(`[EXTRACT ALL DEBUG] FFmpeg loaded: ${ffmpegRef.current.loaded}, Has metadata: ${!!metadata}`);
-    
+
     if (!ffmpegRef.current.loaded || !metadata) {
       console.log(`[EXTRACT ALL DEBUG] Early return - FFmpeg loaded: ${ffmpegRef.current.loaded}, metadata: ${!!metadata}`);
       return;
@@ -922,9 +923,34 @@ export const useOptimizedVideoMetadata = (): UseOptimizedVideoMetadataResult => 
     try {
       showProgress('Preparing batch subtitle extraction...', 5);
 
+      // Fast path: MKV/WebM bypasses FFmpeg entirely via the pure-JS
+      // Matroska parser. The FFmpeg path below copies the whole file into
+      // MEMFS via writeFile() and dies at ~2GB with "File could not be
+      // read! Code=-1". Reported on the 13.10GB
+      // Remarkably.Bright.Creatures... MKV.
+      if (await isMatroska(file)) {
+        console.log(`[EXTRACT ALL DEBUG] MKV fast path for ${file.name}`);
+        const report = await extractMkvSubtitlesFast(file, (text, percent) => {
+          showProgress(text, percent ?? 50);
+        });
+        if (report.errors.length > 0) {
+          console.warn('[EXTRACT ALL DEBUG] MKV fast path warnings:', report.errors);
+        }
+        if (report.extractedCount === 0) {
+          showError(`MKV fast path produced no subtitles: ${report.errors.join('; ') || 'unknown reason'}`);
+          return;
+        }
+        showProgress(
+          `Extracted ${report.extractedCount}/${report.totalSubtitleStreams} subtitle tracks → ${report.zipFilename} (${(report.zipSize / 1024).toFixed(1)}KB) in ${(report.durationMs / 1000).toFixed(1)}s`,
+          100,
+        );
+        console.log(`[EXTRACT ALL DEBUG] MKV fast path done in ${report.durationMs}ms`);
+        return;
+      }
+
       const subtitleStreams = metadata.streams?.filter(stream => stream.codec_type === 'subtitle') || [];
       console.log(`[EXTRACT ALL DEBUG] Found ${subtitleStreams.length} subtitle streams`);
-      
+
       if (subtitleStreams.length === 0) {
         console.log(`[EXTRACT ALL DEBUG] No subtitle streams found, showing error`);
         showError(ERROR_MESSAGES.SUBTITLE.NO_TRACKS);
